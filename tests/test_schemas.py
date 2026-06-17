@@ -7,7 +7,9 @@ from researchinfra.schemas import (
     Draft,
     EvidenceLink,
     Experiment,
+    Feed,
     Idea,
+    InboxItem,
     ModelProviderConfig,
     Paper,
     Project,
@@ -37,6 +39,14 @@ def test_core_schemas_validate_minimal_objects() -> None:
     draft = Draft(id="draft:example", title="Draft", claims=[claim.id])
     review = Review(id="review:example", reviewer="human")
     source = Source(id="source:example", target="https://example.com", source_type="web")
+    feed = Feed(id="feed:example", name="arXiv", type="arxiv", query="cat:cs.CL")
+    inbox_item = InboxItem(
+        id="inbox:example",
+        feed_id=feed.id,
+        type="paper",
+        title="Inbox Paper",
+        url="https://arxiv.org/abs/1234.5678",
+    )
     skill = Skill(
         name="paper_card",
         description="Create a Paper Card.",
@@ -56,6 +66,8 @@ def test_core_schemas_validate_minimal_objects() -> None:
     assert draft.status == "outline"
     assert review.decision == "no_decision"
     assert source.source_type == "web"
+    assert feed.type == "arxiv"
+    assert inbox_item.status == "new"
     assert skill.name == "paper_card"
     assert workspace.schema_version == "0.1"
 

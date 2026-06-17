@@ -84,10 +84,57 @@ class Source(ResearchInfraModel):
     source_type: SourceType = "unknown"
     target: str = Field(..., min_length=1)
     title: str | None = None
+    abstract: str | None = None
+    authors: list[str] = Field(default_factory=list)
+    published_at: datetime | None = None
+    external_id: str | None = None
+    pdf_url: str | None = None
+    bibtex: str | None = None
     tags: list[str] = Field(default_factory=list)
     local: SourceLocalMetadata | None = None
     url: SourceUrlMetadata | None = None
     notes: str | None = None
+    raw_metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+FeedType = Literal["arxiv", "rss", "atom", "web"]
+
+
+class Feed(ResearchInfraModel):
+    """A configured source discovery feed."""
+
+    id: str = Field(..., min_length=1)
+    name: str = Field(..., min_length=1)
+    type: FeedType
+    url: str | None = None
+    query: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    enabled: bool = True
+    created_at: datetime = Field(default_factory=utc_now)
+    last_synced_at: datetime | None = None
+
+
+InboxStatus = Literal["new", "saved", "skipped"]
+
+
+class InboxItem(ResearchInfraModel):
+    """A discovered source candidate before promotion into the source registry."""
+
+    id: str = Field(..., min_length=1)
+    feed_id: str = Field(..., min_length=1)
+    type: SourceType = "unknown"
+    title: str = Field(..., min_length=1)
+    url: str = Field(..., min_length=1)
+    abstract: str | None = None
+    authors: list[str] = Field(default_factory=list)
+    published_at: datetime | None = None
+    external_id: str | None = None
+    pdf_url: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    status: InboxStatus = "new"
+    raw_metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
