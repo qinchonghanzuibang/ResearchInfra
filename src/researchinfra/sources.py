@@ -48,6 +48,20 @@ class SourceRegistry:
                 return source
         raise SourceNotFoundError(f"Source not found: {source_id}")
 
+    def find_by_url_or_external_id(
+        self, *, url: str | None = None, external_id: str | None = None
+    ) -> Source | None:
+        """Find a source by normalized URL or external id."""
+
+        normalized_url = _normalize_url(url) if url else None
+        for source in self.list():
+            source_url = source.url.url if source.url is not None else source.target
+            if normalized_url and _normalize_url(source_url) == normalized_url:
+                return source
+            if external_id and source.external_id == external_id:
+                return source
+        return None
+
     def add(
         self,
         target: str,
@@ -55,6 +69,13 @@ class SourceRegistry:
         source_type: SourceType = "unknown",
         title: str | None = None,
         tags: list[str] | None = None,
+        abstract: str | None = None,
+        authors: list[str] | None = None,
+        published_at: object | None = None,
+        external_id: str | None = None,
+        pdf_url: str | None = None,
+        bibtex: str | None = None,
+        raw_metadata: dict[str, object] | None = None,
     ) -> Source:
         """Add or update a source record for a local path or URL."""
 
@@ -72,6 +93,13 @@ class SourceRegistry:
                 source_type=source_type,
                 title=title,
                 tags=tags or [],
+                abstract=abstract,
+                authors=authors or [],
+                published_at=published_at,
+                external_id=external_id,
+                pdf_url=pdf_url,
+                bibtex=bibtex,
+                raw_metadata=raw_metadata or {},
                 created_at=now,
                 updated_at=now,
             )
@@ -81,7 +109,16 @@ class SourceRegistry:
                 update={
                     "source_type": source_type,
                     "title": title or existing.title,
+                    "abstract": abstract or existing.abstract,
+                    "authors": authors if authors is not None else existing.authors,
+                    "published_at": published_at or existing.published_at,
+                    "external_id": external_id or existing.external_id,
+                    "pdf_url": pdf_url or existing.pdf_url,
+                    "bibtex": bibtex or existing.bibtex,
                     "tags": tags if tags is not None else existing.tags,
+                    "raw_metadata": (
+                        raw_metadata if raw_metadata is not None else existing.raw_metadata
+                    ),
                     "updated_at": now,
                 }
             )
@@ -98,6 +135,13 @@ class SourceRegistry:
         source_type: SourceType,
         title: str | None,
         tags: list[str],
+        abstract: str | None,
+        authors: list[str],
+        published_at: object | None,
+        external_id: str | None,
+        pdf_url: str | None,
+        bibtex: str | None,
+        raw_metadata: dict[str, object],
         created_at: datetime,
         updated_at: datetime,
     ) -> Source:
@@ -108,8 +152,15 @@ class SourceRegistry:
                 source_type=source_type,
                 target=target,
                 title=title,
+                abstract=abstract,
+                authors=authors,
+                published_at=published_at,
+                external_id=external_id,
+                pdf_url=pdf_url,
+                bibtex=bibtex,
                 tags=tags,
                 url=SourceUrlMetadata(url=target, domain=parsed.netloc or None),
+                raw_metadata=raw_metadata,
                 created_at=created_at,
                 updated_at=updated_at,
             )
@@ -127,6 +178,12 @@ class SourceRegistry:
             source_type=source_type,
             target=display_path,
             title=title,
+            abstract=abstract,
+            authors=authors,
+            published_at=published_at,
+            external_id=external_id,
+            pdf_url=pdf_url,
+            bibtex=bibtex,
             tags=tags,
             local=SourceLocalMetadata(
                 path=display_path,
@@ -135,9 +192,20 @@ class SourceRegistry:
                 size_bytes=stat.st_size if stat is not None else None,
                 created_at=created,
             ),
+            raw_metadata=raw_metadata,
             created_at=created_at,
             updated_at=updated_at,
         )
+
+    def update(self, source: Source) -> Source:
+        """Replace an existing source record."""
+
+        sources = self.list()
+        if not any(item.id == source.id for item in sources):
+            raise SourceNotFoundError(f"Source not found: {source.id}")
+        updated = source.model_copy(update={"updated_at": utc_now()})
+        self._write([updated if item.id == updated.id else item for item in sources])
+        return updated
 
     def _read(self) -> dict[str, object]:
         if not self.registry_path.exists():
@@ -168,6 +236,14 @@ class SourceRegistry:
 def _is_url(value: str) -> bool:
     parsed = urlparse(value)
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def _normalize_url(value: str) -> str:
+    parsed = urlparse(value)
+    scheme = parsed.scheme.lower()
+    netloc = parsed.netloc.lower()
+    path = parsed.path.rstrip("/")
+    return f"{scheme}://{netloc}{path}"
 
 
 def _human_path(path: Path, workspace: Path) -> str:
