@@ -25,6 +25,7 @@ WORKSPACE_DIRECTORIES: tuple[str, ...] = (
     "sources/papers",
     "sources/bib",
     "memory",
+    "memory/papers",
     "memory/claims",
     "memory/ideas",
     "memory/reviews",
@@ -36,6 +37,10 @@ WORKSPACE_DIRECTORIES: tuple[str, ...] = (
     "drafts",
     "submissions",
     "skills",
+    "skills/paper_card",
+    "skills/idea_card",
+    "skills/claim_check",
+    "skills/experiment_plan",
     "skills/reading",
     "skills/ideation",
     "skills/experiment-planning",
@@ -127,6 +132,7 @@ def init_workspace(
     _write_workspace_readme(workspace_path, workspace_name)
     _write_directory_guides(workspace_path)
     _write_skills(workspace_path)
+    _write_builtin_skill_files(workspace_path)
     _write_venue_templates(workspace_path)
     _write_agent_placeholders(workspace_path)
 
@@ -171,7 +177,7 @@ def _write_workspace_readme(workspace_path: Path, workspace_name: str) -> None:
 def _write_directory_guides(workspace_path: Path) -> None:
     guides = {
         "sources/README.md": "Store papers, BibTeX files, PDFs, and source metadata here.",
-        "memory/README.md": "Store durable ideas, claims, reviews, and research memory here.",
+        "memory/README.md": "Store Paper Cards, Idea Cards, claims, reviews, and notes here.",
         "projects/README.md": "Create one directory per scoped research project.",
         "experiments/README.md": "Track planned experiments and baselines before runs.",
         "runs/README.md": "Store immutable run records, metrics, logs, and artifact pointers.",
@@ -203,6 +209,25 @@ def _write_skills(workspace_path: Path) -> None:
             - Avoid fabricating papers, experiments, metrics, or conclusions.
             """,
         )
+
+
+def _write_builtin_skill_files(workspace_path: Path) -> None:
+    from researchinfra.skills import BUILTIN_SKILLS
+
+    for skill in BUILTIN_SKILLS.values():
+        base = workspace_path / "skills" / skill.name
+        _write_yaml(
+            base / "skill.yaml",
+            {
+                "name": skill.name,
+                "description": skill.description,
+                "inputs": skill.inputs,
+                "outputs": skill.outputs,
+                "recommended_model_tier": skill.recommended_model_tier,
+                "prompt": "prompt.md",
+            },
+        )
+        _write_file(base / "prompt.md", skill.prompt_template)
 
 
 def _write_venue_templates(workspace_path: Path) -> None:
