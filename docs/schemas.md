@@ -5,6 +5,8 @@ The core schemas live in `researchinfra.schemas` and use Pydantic v2.
 ## Core Objects
 
 - `WorkspaceConfig`
+- `Feed`
+- `InboxItem`
 - `Source`
 - `Paper`
 - `Claim`
@@ -31,6 +33,20 @@ ResearchInfra oriented around inspectable support rather than generated prose.
 path, filename, extension, size, and created timestamp. URL records can include
 the URL and domain. The source registry is stored in
 `.researchinfra/sources.yaml`.
+
+Sources can also store lightweight enrichment metadata such as title, authors,
+abstract, published date, external id, PDF URL, BibTeX, tags, and raw metadata.
+
+## Feeds And Inbox
+
+`Feed` records describe configured discovery sources such as arXiv queries,
+RSS feeds, Atom feeds, or web links. They are stored in
+`.researchinfra/feeds.yaml`.
+
+`InboxItem` records describe discovered items that have not yet been promoted
+into the source registry. Inbox items include title, URL, abstract, authors,
+published date, external id, tags, status, and raw metadata. They are stored in
+`.researchinfra/inbox.yaml`.
 
 ## Skills
 

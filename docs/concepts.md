@@ -5,6 +5,17 @@
 A paper is a source object: title, authors, venue, identifiers, local paths,
 BibTeX keys, tags, and notes.
 
+## Feed
+
+A feed is a configured discovery source, such as an arXiv query, RSS feed, Atom
+feed, or manually tracked web source.
+
+## Inbox Item
+
+An inbox item is a discovered source candidate that has not yet been promoted
+into the main source registry. Researchers can inspect, promote, or skip inbox
+items.
+
 ## Claim
 
 A claim is a statement that should be linkable to evidence. Claims can begin as
@@ -38,4 +49,3 @@ explicit evidence.
 ## Agent Task
 
 An agent task is a human-approved work item for a manual or automated backend.
-

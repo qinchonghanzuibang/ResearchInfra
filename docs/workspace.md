@@ -5,6 +5,9 @@ places for research state:
 
 ```text
 .researchinfra/        Workspace configuration
+.researchinfra/feeds.yaml
+.researchinfra/inbox.yaml
+.researchinfra/sources.yaml
 sources/               Papers, BibTeX, PDFs, and external references
 memory/                Claims, ideas, reviews, and durable notes
 memory/papers/         Generated Paper Cards and metadata
@@ -24,6 +27,7 @@ The hidden `.researchinfra/workspace.yaml` file stores the workspace config.
 It includes directory mappings plus disabled placeholder provider and backend
 configuration. Credentials should not be stored in workspace files.
 
-Source registry records are stored in `.researchinfra/sources.yaml`. Generated
-Paper Cards live under `memory/papers/`; generated Idea Cards live under
-`memory/ideas/`.
+Feed registry records are stored in `.researchinfra/feeds.yaml`; discovered
+inbox items are stored in `.researchinfra/inbox.yaml`; promoted source records
+are stored in `.researchinfra/sources.yaml`. Generated Paper Cards live under
+`memory/papers/`; generated Idea Cards live under `memory/ideas/`.

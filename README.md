@@ -26,6 +26,7 @@ experiment tracker. It is a clean substrate for serious research infrastructure.
 
 - `researchinfra init <workspace>` to create a local workspace.
 - Source registry commands for adding, listing, and inspecting local files and URLs.
+- Feed and inbox commands for discovering sources before promotion.
 - Skill commands for listing reusable research workflows and dry-running prompts.
 - Optional OpenAI-compatible model calls through environment variables.
 - Paper Card and Idea Card generation as Markdown plus YAML metadata.
@@ -145,6 +146,31 @@ Paper Cards are written under `memory/papers/`; Idea Cards are written under
 `memory/ideas/`. Generated cards include an explicit warning when they are based
 only on limited metadata rather than full paper text. ResearchInfra does not
 fabricate experiments, citations, results, or paper content.
+
+## Discovery Workflow
+
+Configure feeds, sync them into the review inbox, and promote only the items you
+want to keep:
+
+```bash
+researchinfra init /tmp/ri-demo --force
+researchinfra feed add \
+  --workspace /tmp/ri-demo \
+  --type arxiv \
+  --name "MLLM papers" \
+  --query 'cat:cs.CV AND "multimodal"'
+researchinfra feed sync --workspace /tmp/ri-demo --limit 5
+researchinfra inbox list --workspace /tmp/ri-demo
+researchinfra inbox show inbox-... --workspace /tmp/ri-demo
+researchinfra inbox promote inbox-... --workspace /tmp/ri-demo
+researchinfra source enrich src-... --workspace /tmp/ri-demo
+researchinfra paper create-card src-... --workspace /tmp/ri-demo
+```
+
+Feeds and inbox items are stored as local YAML files under `.researchinfra/`.
+arXiv and RSS/Atom sync extract lightweight metadata only: title, URL, authors,
+abstract or summary, published date, external id, PDF URL when available, and
+tags. ResearchInfra does not download PDFs or scrape web pages during discovery.
 
 ## Architecture
 
