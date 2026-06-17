@@ -43,8 +43,33 @@ experiment tracker. It is a clean substrate for serious research infrastructure.
 
 ## Quickstart
 
+Choose one setup workflow.
+
+With standard `pip` and `venv`:
+
 ```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
 pip install -e ".[dev]"
+researchinfra --help
+researchinfra init my-research
+```
+
+With `uv`:
+
+```bash
+uv venv --python 3.12
+source .venv/bin/activate
+uv pip install -e ".[dev]"
+uv run researchinfra --help
+uv run researchinfra init my-research
+```
+
+With `conda`:
+
+```bash
+conda env create -f environment.yml
+conda activate researchinfra
 researchinfra --help
 researchinfra init my-research
 ```
@@ -101,16 +126,30 @@ scientific results.
 
 ## Development
 
+See [docs/development.md](docs/development.md) for complete setup instructions
+for `pip`/`venv`, `uv`, and `conda`.
+
 ```bash
-pip install -e ".[dev]"
-pytest
+python -m pip install -e ".[dev]"
+python -m pytest
+python -m ruff check .
+python -m ruff format .
+```
+
+Common commands are also available through `make`:
+
+```bash
+make install-dev
+make test
+make lint
+make format
 ```
 
 The package keeps dependencies small:
 
 - `pydantic` for typed schemas and validation.
 - `PyYAML` for human-readable workspace configuration.
-- `pytest` as an optional development dependency.
+- `pytest` and `ruff` as optional development dependencies.
 
 ## Roadmap
 
@@ -126,4 +165,3 @@ The package keeps dependencies small:
 ResearchInfra should grow as a dependable research substrate, not as a monolith.
 The v1 goal is a clear foundation that can support future ingestion, writing,
 experiment tracking, and agent execution.
-
