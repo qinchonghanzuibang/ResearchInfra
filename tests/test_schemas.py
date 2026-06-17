@@ -13,6 +13,8 @@ from researchinfra.schemas import (
     Project,
     Review,
     Run,
+    Skill,
+    Source,
     WorkspaceConfig,
 )
 
@@ -34,6 +36,12 @@ def test_core_schemas_validate_minimal_objects() -> None:
     run = Run(id="run:example", experiment_id=experiment.id, metrics={"status": "not_run"})
     draft = Draft(id="draft:example", title="Draft", claims=[claim.id])
     review = Review(id="review:example", reviewer="human")
+    source = Source(id="source:example", target="https://example.com", source_type="web")
+    skill = Skill(
+        name="paper_card",
+        description="Create a Paper Card.",
+        prompt_template="Read $input_text",
+    )
     provider = ModelProviderConfig(id="ollama-local", provider="ollama")
     backend = AgentBackendConfig(id="manual", backend="manual", enabled=True)
     workspace = WorkspaceConfig(
@@ -47,6 +55,8 @@ def test_core_schemas_validate_minimal_objects() -> None:
     assert run.metrics["status"] == "not_run"
     assert draft.status == "outline"
     assert review.decision == "no_decision"
+    assert source.source_type == "web"
+    assert skill.name == "paper_card"
     assert workspace.schema_version == "0.1"
 
 

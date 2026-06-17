@@ -12,6 +12,8 @@ from researchinfra.schemas import (
     Project,
     Review,
     Run,
+    Skill,
+    Source,
     WorkspaceConfig,
 )
 
@@ -27,6 +29,8 @@ __all__ = [
     "Project",
     "Review",
     "Run",
+    "Skill",
+    "Source",
     "WorkspaceConfig",
 ]
 

@@ -57,6 +57,41 @@ class Paper(ResearchInfraModel):
     notes: str | None = None
 
 
+SourceType = Literal["paper", "blog", "repo", "note", "web", "unknown"]
+
+
+class SourceLocalMetadata(ResearchInfraModel):
+    """Metadata captured for a local file source."""
+
+    path: str = Field(..., min_length=1)
+    filename: str = Field(..., min_length=1)
+    extension: str | None = None
+    size_bytes: int | None = Field(default=None, ge=0)
+    created_at: datetime | None = None
+
+
+class SourceUrlMetadata(ResearchInfraModel):
+    """Metadata captured for a URL source."""
+
+    url: str = Field(..., min_length=1)
+    domain: str | None = None
+
+
+class Source(ResearchInfraModel):
+    """A local or remote source tracked by a workspace registry."""
+
+    id: str = Field(..., min_length=1)
+    source_type: SourceType = "unknown"
+    target: str = Field(..., min_length=1)
+    title: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    local: SourceLocalMetadata | None = None
+    url: SourceUrlMetadata | None = None
+    notes: str | None = None
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
 class Claim(ResearchInfraModel):
     """A research claim that can be grounded in explicit evidence."""
 
@@ -183,6 +218,18 @@ class AgentTask(ResearchInfraModel):
     requires_human_approval: bool = True
     created_at: datetime = Field(default_factory=utc_now)
     completed_at: datetime | None = None
+
+
+class Skill(ResearchInfraModel):
+    """A reusable research workflow prompt with metadata."""
+
+    name: str = Field(..., min_length=1)
+    description: str = Field(..., min_length=1)
+    inputs: list[str] = Field(default_factory=list)
+    outputs: list[str] = Field(default_factory=list)
+    recommended_model_tier: str = "optional"
+    prompt_template: str = Field(..., min_length=1)
+    origin: Literal["built-in", "workspace"] = "built-in"
 
 
 ProviderKind = Literal[
