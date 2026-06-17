@@ -7,6 +7,7 @@ places for research state:
 .researchinfra/        Workspace configuration
 sources/               Papers, BibTeX, PDFs, and external references
 memory/                Claims, ideas, reviews, and durable notes
+memory/papers/         Generated Paper Cards and metadata
 projects/              Scoped research efforts
 experiments/           Experiment plans and baseline definitions
 runs/                  Concrete execution records
@@ -23,3 +24,6 @@ The hidden `.researchinfra/workspace.yaml` file stores the workspace config.
 It includes directory mappings plus disabled placeholder provider and backend
 configuration. Credentials should not be stored in workspace files.
 
+Source registry records are stored in `.researchinfra/sources.yaml`. Generated
+Paper Cards live under `memory/papers/`; generated Idea Cards live under
+`memory/ideas/`.

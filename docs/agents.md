@@ -32,3 +32,12 @@ Supported provider configuration kinds:
 Credentials belong in environment variables or caller-managed secret stores, not
 in workspace files.
 
+## OpenAI-Compatible Check
+
+The `researchinfra model check` command reports whether the
+OpenAI-compatible provider is configured through environment variables without
+printing secret values. Runtime model calls use:
+
+- `OPENAI_API_KEY`
+- `OPENAI_BASE_URL` optional
+- `OPENAI_MODEL` optional

@@ -25,6 +25,10 @@ experiment tracker. It is a clean substrate for serious research infrastructure.
 ## What v1 Provides
 
 - `researchinfra init <workspace>` to create a local workspace.
+- Source registry commands for adding, listing, and inspecting local files and URLs.
+- Skill commands for listing reusable research workflows and dry-running prompts.
+- Optional OpenAI-compatible model calls through environment variables.
+- Paper Card and Idea Card generation as Markdown plus YAML metadata.
 - Pydantic schemas for core research objects:
   `WorkspaceConfig`, `Paper`, `Claim`, `Idea`, `Project`, `Experiment`, `Run`,
   `Draft`, `Review`, `AgentTask`, `ModelProviderConfig`, and
@@ -96,6 +100,51 @@ my-research/
 ResearchInfra does not require a specific LLM provider. The default workspace
 contains disabled provider placeholders and a manual backend. You can wire real
 providers and agents later without changing the research object model.
+
+## Local Workflow Demo
+
+Create a workspace and register a source:
+
+```bash
+researchinfra init /tmp/ri-demo --force
+researchinfra source add https://arxiv.org/abs/1234.5678 \
+  --workspace /tmp/ri-demo \
+  --type paper \
+  --title "Demo Paper" \
+  --tags demo,arxiv
+researchinfra source list --workspace /tmp/ri-demo
+```
+
+Dry-run a built-in skill to inspect the rendered prompt before any model call:
+
+```bash
+researchinfra skill list --workspace /tmp/ri-demo
+researchinfra skill run paper_card \
+  --workspace /tmp/ri-demo \
+  --input src-... \
+  --dry-run
+```
+
+Model calls are optional and use OpenAI-compatible environment variables:
+
+```bash
+export OPENAI_API_KEY=...
+export OPENAI_BASE_URL=https://api.openai.com/v1  # optional
+export OPENAI_MODEL=gpt-4o-mini                   # optional
+researchinfra model check
+```
+
+Create file-first cards:
+
+```bash
+researchinfra paper create-card src-... --workspace /tmp/ri-demo
+researchinfra idea generate --workspace /tmp/ri-demo --from-paper paper-...
+```
+
+Paper Cards are written under `memory/papers/`; Idea Cards are written under
+`memory/ideas/`. Generated cards include an explicit warning when they are based
+only on limited metadata rather than full paper text. ResearchInfra does not
+fabricate experiments, citations, results, or paper content.
 
 ## Architecture
 
