@@ -27,4 +27,3 @@ def test_init_workspace_with_custom_name(tmp_path) -> None:  # type: ignore[no-u
 
     assert result.config.name == "Lab Workspace"
     assert "Lab Workspace" in (workspace / "README.md").read_text()
-

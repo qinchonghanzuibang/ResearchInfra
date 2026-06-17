@@ -49,4 +49,3 @@ class OpenRouterProvider(PlaceholderModelProvider):
 
 class VLLMProvider(PlaceholderModelProvider):
     display_name = "vLLM"
-

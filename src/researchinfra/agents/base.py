@@ -37,4 +37,3 @@ class AgentBackend(ABC):
     @abstractmethod
     def run(self, task: AgentTask, workspace: Path) -> AgentBackendResult:
         """Run or enqueue an agent task for a workspace."""
-

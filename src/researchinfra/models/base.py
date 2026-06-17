@@ -34,4 +34,3 @@ class ModelProvider(ABC):
     @abstractmethod
     def complete(self, prompt: str, **kwargs: Any) -> ModelProviderResult:
         """Return a completion for a prompt."""
-

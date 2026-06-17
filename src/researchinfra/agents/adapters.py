@@ -51,4 +51,3 @@ class OpenHandsAgentBackend(PlaceholderAgentBackend):
 
 class OpenClawAgentBackend(PlaceholderAgentBackend):
     display_name = "OpenClaw"
-

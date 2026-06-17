@@ -62,9 +62,7 @@ class Claim(ResearchInfraModel):
 
     id: str = Field(..., min_length=1)
     text: str = Field(..., min_length=1)
-    status: Literal["hypothesis", "supported", "challenged", "retracted", "unknown"] = (
-        "hypothesis"
-    )
+    status: Literal["hypothesis", "supported", "challenged", "retracted", "unknown"] = "hypothesis"
     evidence: list[EvidenceLink] = Field(default_factory=list)
     open_questions: list[str] = Field(default_factory=list)
     owner: str | None = None
@@ -112,9 +110,7 @@ class Experiment(ResearchInfraModel):
     datasets: list[str] = Field(default_factory=list)
     metrics: list[str] = Field(default_factory=list)
     expected_artifacts: list[str] = Field(default_factory=list)
-    status: Literal["planned", "ready", "running", "completed", "blocked", "abandoned"] = (
-        "planned"
-    )
+    status: Literal["planned", "ready", "running", "completed", "blocked", "abandoned"] = "planned"
     created_at: datetime = Field(default_factory=utc_now)
 
 
@@ -143,9 +139,7 @@ class Draft(ResearchInfraModel):
     title: str = Field(..., min_length=1)
     project_id: str | None = None
     venue: str | None = None
-    status: Literal["outline", "drafting", "internal_review", "submitted", "archived"] = (
-        "outline"
-    )
+    status: Literal["outline", "drafting", "internal_review", "submitted", "archived"] = "outline"
     sections: list[str] = Field(default_factory=list)
     claims: list[str] = Field(default_factory=list)
     evidence: list[EvidenceLink] = Field(default_factory=list)
@@ -238,4 +232,3 @@ class WorkspaceConfig(ResearchInfraModel):
     directories: dict[str, str] = Field(default_factory=dict)
     model_providers: list[ModelProviderConfig] = Field(default_factory=list)
     agent_backends: list[AgentBackendConfig] = Field(default_factory=list)
-

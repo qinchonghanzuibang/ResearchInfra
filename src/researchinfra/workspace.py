@@ -104,7 +104,9 @@ def default_workspace_config(name: str) -> WorkspaceConfig:
     )
 
 
-def init_workspace(path: str | Path, *, name: str | None = None, force: bool = False) -> InitializedWorkspace:
+def init_workspace(
+    path: str | Path, *, name: str | None = None, force: bool = False
+) -> InitializedWorkspace:
     """Create a ResearchInfra workspace directory and starter files."""
 
     workspace_path = Path(path).expanduser().resolve()
@@ -171,12 +173,12 @@ def _write_directory_guides(workspace_path: Path) -> None:
         "sources/README.md": "Store papers, BibTeX files, PDFs, and source metadata here.",
         "memory/README.md": "Store durable ideas, claims, reviews, and research memory here.",
         "projects/README.md": "Create one directory per scoped research project.",
-        "experiments/README.md": "Track planned experiments and baselines before recording concrete runs.",
+        "experiments/README.md": "Track planned experiments and baselines before runs.",
         "runs/README.md": "Store immutable run records, metrics, logs, and artifact pointers.",
         "figures/README.md": "Store figures and tables linked from claims, runs, and drafts.",
         "drafts/README.md": "Store outlines, Markdown drafts, LaTeX drafts, and evidence maps.",
         "submissions/README.md": "Store venue packaging checklists and submission artifacts.",
-        "agents/README.md": "Store agent backend configs and task records. Keep human approval explicit.",
+        "agents/README.md": "Store agent backend configs and task records with human approval.",
         "templates/README.md": "Store reusable project, experiment, draft, and venue templates.",
         "docs/README.md": "Store workspace-local documentation and lab conventions.",
     }
@@ -242,4 +244,3 @@ def _write_agent_placeholders(workspace_path: Path) -> None:
                 "notes": "Placeholder configuration. Add local commands or API routing when ready.",
             },
         )
-

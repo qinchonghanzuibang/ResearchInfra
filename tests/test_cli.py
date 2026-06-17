@@ -21,4 +21,3 @@ def test_cli_init_creates_workspace(tmp_path, capsys) -> None:  # type: ignore[n
     assert (workspace / ".researchinfra" / "workspace.yaml").exists()
     assert (workspace / "skills" / "reading" / "SKILL.md").exists()
     assert (workspace / "templates" / "venues" / "neurips" / "main.tex").exists()
-

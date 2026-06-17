@@ -61,4 +61,3 @@ def test_provider_and_backend_kinds_are_constrained() -> None:
 
     with pytest.raises(ValidationError):
         AgentBackendConfig(id="bad", backend="unknown")  # type: ignore[arg-type]
-
