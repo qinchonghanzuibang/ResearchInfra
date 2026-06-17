@@ -10,6 +10,15 @@ import yaml
 
 from researchinfra import __version__
 from researchinfra.cards import CardError, IdeaCardService, PaperCardService
+from researchinfra.discovery import (
+    DiscoveryError,
+    FeedNotFoundError,
+    FeedRegistry,
+    FeedSyncer,
+    Inbox,
+    InboxItemNotFoundError,
+    SourceEnricher,
+)
 from researchinfra.models.adapters import OpenAICompatibleProvider
 from researchinfra.models.base import ModelProviderConfigurationError, ModelProviderRequestError
 from researchinfra.schemas import ModelProviderConfig
@@ -65,6 +74,46 @@ def build_parser() -> argparse.ArgumentParser:
     source_show = source_subparsers.add_parser("show", help="Show one registered source.")
     source_show.add_argument("source_id", help="Source id to inspect.")
     source_show.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+
+    source_enrich = source_subparsers.add_parser("enrich", help="Enrich source metadata.")
+    source_enrich.add_argument("source_id", help="Source id to enrich.")
+    source_enrich.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+
+    feed_parser = subparsers.add_parser("feed", help="Manage discovery feeds.")
+    feed_subparsers = feed_parser.add_subparsers(dest="feed_command")
+    feed_add = feed_subparsers.add_parser("add", help="Add a discovery feed.")
+    feed_add.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    feed_add.add_argument("--type", required=True, choices=["arxiv", "rss", "atom", "web"])
+    feed_add.add_argument("--name", required=True, help="Feed name.")
+    feed_add.add_argument("--query", help="arXiv query.")
+    feed_add.add_argument("--url", help="RSS, Atom, or web URL.")
+    feed_add.add_argument("--tags", default="", help="Comma-separated tags.")
+
+    feed_list = feed_subparsers.add_parser("list", help="List discovery feeds.")
+    feed_list.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+
+    feed_sync = feed_subparsers.add_parser("sync", help="Sync feeds into the inbox.")
+    feed_sync.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    feed_sync.add_argument("--feed", help="Optional feed id to sync.")
+    feed_sync.add_argument("--limit", type=int, default=20, help="Maximum items per feed.")
+
+    inbox_parser = subparsers.add_parser("inbox", help="Review discovered source candidates.")
+    inbox_subparsers = inbox_parser.add_subparsers(dest="inbox_command")
+    inbox_list = inbox_subparsers.add_parser("list", help="List inbox items.")
+    inbox_list.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    inbox_list.add_argument("--status", choices=["new", "saved", "skipped"], help="Filter status.")
+
+    inbox_show = inbox_subparsers.add_parser("show", help="Show one inbox item.")
+    inbox_show.add_argument("item_id", help="Inbox item id.")
+    inbox_show.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+
+    inbox_promote = inbox_subparsers.add_parser("promote", help="Promote inbox item to source.")
+    inbox_promote.add_argument("item_id", help="Inbox item id.")
+    inbox_promote.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+
+    inbox_skip = inbox_subparsers.add_parser("skip", help="Skip inbox item.")
+    inbox_skip.add_argument("item_id", help="Inbox item id.")
+    inbox_skip.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
 
     skill_parser = subparsers.add_parser("skill", help="List and run reusable skills.")
     skill_subparsers = skill_parser.add_subparsers(dest="skill_command")
@@ -133,6 +182,12 @@ def run(argv: Sequence[str] | None = None) -> int:
     if args.command == "source":
         return _run_source(args)
 
+    if args.command == "feed":
+        return _run_feed(args)
+
+    if args.command == "inbox":
+        return _run_inbox(args)
+
     if args.command == "skill":
         return _run_skill(args)
 
@@ -181,7 +236,98 @@ def _run_source(args: argparse.Namespace) -> int:
         print(yaml.safe_dump(source.model_dump(mode="json"), sort_keys=False).strip())
         return 0
 
-    return _error("source requires a subcommand: add, list, or show", code=2)
+    if args.source_command == "enrich":
+        try:
+            source = SourceEnricher(args.workspace).enrich(args.source_id)
+        except (DiscoveryError, SourceNotFoundError) as exc:
+            return _error(str(exc), code=2)
+        print(f"Enriched source: {source.id}")
+        print(yaml.safe_dump(source.model_dump(mode="json"), sort_keys=False).strip())
+        return 0
+
+    return _error("source requires a subcommand: add, list, show, or enrich", code=2)
+
+
+def _run_feed(args: argparse.Namespace) -> int:
+    registry = FeedRegistry(args.workspace)
+    if args.feed_command == "add":
+        try:
+            feed = registry.add(
+                name=args.name,
+                feed_type=args.type,
+                query=args.query,
+                url=args.url,
+                tags=_parse_tags(args.tags),
+            )
+        except DiscoveryError as exc:
+            return _error(str(exc), code=2)
+        print(f"Added feed: {feed.id}")
+        print(f"Name: {feed.name}")
+        print(f"Type: {feed.type}")
+        return 0
+
+    if args.feed_command == "list":
+        feeds = registry.list()
+        if not feeds:
+            print("No feeds configured.")
+            return 0
+        for feed in feeds:
+            target = feed.query or feed.url or ""
+            synced = feed.last_synced_at.isoformat() if feed.last_synced_at else "never"
+            print(f"{feed.id}\t{feed.type}\t{feed.name}\t{target}\tlast_synced={synced}")
+        return 0
+
+    if args.feed_command == "sync":
+        try:
+            added = FeedSyncer(args.workspace).sync(feed_id=args.feed, limit=args.limit)
+        except (DiscoveryError, FeedNotFoundError) as exc:
+            return _error(str(exc), code=2)
+        print(f"Added inbox items: {len(added)}")
+        for item in added:
+            print(f"{item.id}\t{item.type}\t{item.title}\t{item.url}")
+        return 0
+
+    return _error("feed requires a subcommand: add, list, or sync", code=2)
+
+
+def _run_inbox(args: argparse.Namespace) -> int:
+    inbox = Inbox(args.workspace)
+    if args.inbox_command == "list":
+        items = inbox.list(status=args.status)
+        if not items:
+            print("No inbox items.")
+            return 0
+        for item in items:
+            print(f"{item.id}\t{item.status}\t{item.type}\t{item.title}\t{item.url}")
+        return 0
+
+    if args.inbox_command == "show":
+        try:
+            item = inbox.get(args.item_id)
+        except InboxItemNotFoundError as exc:
+            return _error(str(exc), code=2)
+        print(yaml.safe_dump(item.model_dump(mode="json"), sort_keys=False).strip())
+        return 0
+
+    if args.inbox_command == "promote":
+        try:
+            source = inbox.promote(args.item_id)
+        except (InboxItemNotFoundError, SourceNotFoundError) as exc:
+            return _error(str(exc), code=2)
+        print(f"Promoted inbox item: {args.item_id}")
+        print(f"Source: {source.id}")
+        print(f"Target: {source.target}")
+        return 0
+
+    if args.inbox_command == "skip":
+        try:
+            item = inbox.skip(args.item_id)
+        except InboxItemNotFoundError as exc:
+            return _error(str(exc), code=2)
+        print(f"Skipped inbox item: {item.id}")
+        return 0
+
+    return _error("inbox requires a subcommand: list, show, promote, or skip", code=2)
 
 
 def _run_skill(args: argparse.Namespace) -> int:

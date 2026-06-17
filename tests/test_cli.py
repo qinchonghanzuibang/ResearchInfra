@@ -180,3 +180,70 @@ def test_cli_creates_paper_and_idea_cards(tmp_path, capsys, monkeypatch) -> None
     assert idea_code == 0
     assert (workspace / "memory" / "ideas" / f"{idea_id}.md").exists()
     assert (workspace / "memory" / "ideas" / f"{idea_id}.yaml").exists()
+
+
+def test_cli_feed_inbox_and_enrich_workflow(tmp_path, capsys) -> None:  # type: ignore[no-untyped-def]
+    workspace = tmp_path / "workspace"
+    assert run(["init", str(workspace)]) == 0
+    capsys.readouterr()
+    feed_xml = tmp_path / "feed.xml"
+    feed_xml.write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+        <rss version="2.0"><channel><item>
+        <title>RSS Research Note</title>
+        <link>https://example.com/research-note</link>
+        <description>Short summary.</description>
+        <guid>rss-note-1</guid>
+        </item></channel></rss>
+        """,
+        encoding="utf-8",
+    )
+
+    assert (
+        run(
+            [
+                "feed",
+                "add",
+                "--workspace",
+                str(workspace),
+                "--type",
+                "rss",
+                "--name",
+                "RSS",
+                "--url",
+                feed_xml.as_uri(),
+            ]
+        )
+        == 0
+    )
+    feed_output = capsys.readouterr().out
+    feed_id = next(
+        line.split(": ", 1)[1] for line in feed_output.splitlines() if line.startswith("Added")
+    )
+
+    assert run(["feed", "list", "--workspace", str(workspace)]) == 0
+    assert feed_id in capsys.readouterr().out
+
+    assert run(["feed", "sync", "--workspace", str(workspace), "--limit", "5"]) == 0
+    sync_output = capsys.readouterr().out
+    item_id = next(
+        line.split("\t", 1)[0] for line in sync_output.splitlines() if line.startswith("inbox-")
+    )
+
+    assert run(["inbox", "list", "--workspace", str(workspace)]) == 0
+    assert "RSS Research Note" in capsys.readouterr().out
+
+    assert run(["inbox", "show", item_id, "--workspace", str(workspace)]) == 0
+    assert "rss-note-1" in capsys.readouterr().out
+
+    assert run(["inbox", "promote", item_id, "--workspace", str(workspace)]) == 0
+    promote_output = capsys.readouterr().out
+    source_id = next(
+        line.split(": ", 1)[1] for line in promote_output.splitlines() if line.startswith("Source")
+    )
+
+    assert run(["source", "enrich", source_id, "--workspace", str(workspace)]) == 0
+    assert "Enriched source" in capsys.readouterr().out
+
+    assert run(["inbox", "skip", item_id, "--workspace", str(workspace)]) == 0
+    assert "Skipped inbox item" in capsys.readouterr().out
