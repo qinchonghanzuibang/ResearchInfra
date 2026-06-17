@@ -1,21 +1,26 @@
 # Python
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
 build/
 dist/
 
 # Virtual environments
 .venv/
+.conda/
 venv/
 env/
+.env/
 
 # Local outputs
 my-research/
+researchinfra-smoke/
 .DS_Store
-
