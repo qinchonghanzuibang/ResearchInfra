@@ -17,6 +17,14 @@ class ModelProviderResult:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
+class ModelProviderConfigurationError(RuntimeError):
+    """Raised when a provider is not configured for inference."""
+
+
+class ModelProviderRequestError(RuntimeError):
+    """Raised when a provider request fails."""
+
+
 class ModelProvider(ABC):
     """Base class for model providers.
 

@@ -8,12 +8,19 @@ from researchinfra.models.adapters import (
     OpenRouterProvider,
     VLLMProvider,
 )
-from researchinfra.models.base import ModelProvider, ModelProviderResult
+from researchinfra.models.base import (
+    ModelProvider,
+    ModelProviderConfigurationError,
+    ModelProviderRequestError,
+    ModelProviderResult,
+)
 
 __all__ = [
     "AnthropicProvider",
     "LiteLLMProvider",
     "ModelProvider",
+    "ModelProviderConfigurationError",
+    "ModelProviderRequestError",
     "ModelProviderResult",
     "OllamaProvider",
     "OpenAICompatibleProvider",
