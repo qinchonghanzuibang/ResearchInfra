@@ -1,0 +1,41 @@
+# Concepts
+
+## Paper
+
+A paper is a source object: title, authors, venue, identifiers, local paths,
+BibTeX keys, tags, and notes.
+
+## Claim
+
+A claim is a statement that should be linkable to evidence. Claims can begin as
+hypotheses and later become supported, challenged, retracted, or unknown.
+
+## Idea
+
+An idea is a research possibility before it becomes a scoped project. Ideas may
+link to papers and claims.
+
+## Project
+
+A project is a scoped research effort with owners, related ideas, claims,
+experiments, and artifacts.
+
+## Experiment
+
+An experiment is a plan. It records a question, method, baselines, datasets,
+metrics, and expected artifacts.
+
+## Run
+
+A run is an execution record for an experiment. Runs store commands, status,
+seeds, metrics, artifacts, notes, and timestamps.
+
+## Draft
+
+A draft is a paper, report, or submission artifact. Drafts should link claims to
+explicit evidence.
+
+## Agent Task
+
+An agent task is a human-approved work item for a manual or automated backend.
+
