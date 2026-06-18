@@ -1,0 +1,12 @@
+id: idea-evidence-loop
+title: Evidence Loop
+problem: Research artifacts become hard to audit when claims lose links to evidence.
+motivation: A file-first workspace can make evidence review transparent to humans and agents.
+related_papers:
+- paper-demo-source
+claims: []
+status: seed
+tags:
+- demo
+created_at: '2026-06-19T00:00:00+00:00'
+

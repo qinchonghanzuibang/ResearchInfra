@@ -1,0 +1,25 @@
+id: table-runs
+project_id: project-evidence-loop
+title: Run-grounded result table
+path: projects/evidence-loop/tables/table-runs.md
+source_run_ids:
+- run-0001
+columns:
+- run_id
+- experiment_id
+- status
+- smoke_check
+rows:
+- run_id: run-0001
+  experiment_id: experiment-evidence-loop-001
+  status: completed
+  smoke_check: passed
+cell_evidence:
+  run-0001:smoke_check:
+  - kind: run
+    ref: run-0001
+    note: null
+warnings:
+- Demo smoke-check table only; no scientific result is claimed.
+created_at: '2026-06-19T00:00:00+00:00'
+

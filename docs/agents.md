@@ -8,6 +8,7 @@ placeholder adapters, but no provider-specific automation.
 Supported backend configuration kinds:
 
 - `manual`
+- `shell`
 - `api`
 - `codex`
 - `claude-code`
@@ -30,8 +31,23 @@ researchinfra agent task create \
 
 The command writes YAML under `projects/<project-slug>/agents/tasks/` with
 context files, expected outputs, constraints, verification commands, and a
-suggested backend. It does not execute Codex, Claude Code, OpenHands, OpenClaw,
-or any other backend.
+suggested backend.
+
+Execute or dry-run a task through the v1 bridge:
+
+```bash
+researchinfra agent run task-writing-0001 \
+  --project project-... \
+  --workspace /tmp/ri-demo \
+  --backend manual \
+  --dry-run
+```
+
+Manual runs print instructions and, without `--dry-run`, write a result file
+under `projects/<project-slug>/agents/results/`. The shell backend can run only
+commands already declared in `AgentTask.safe_commands`, and only after `--yes`.
+Codex, Claude Code, and OpenHands wrappers report missing installation or
+configuration instructions instead of modifying files silently.
 
 ## Model Providers
 
@@ -47,11 +63,23 @@ Supported provider configuration kinds:
 Credentials belong in environment variables or caller-managed secret stores, not
 in workspace files.
 
-## OpenAI-Compatible Check
+## Model Registry
 
-The `researchinfra model check` command reports whether the
-OpenAI-compatible provider is configured through environment variables without
-printing secret values. Runtime model calls use:
+Workspace model commands:
+
+```bash
+researchinfra model list --workspace /tmp/ri-demo
+researchinfra model set-default \
+  --workspace /tmp/ri-demo \
+  --task reading \
+  --provider openai-compatible \
+  --model gpt-4o-mini
+researchinfra model test --workspace /tmp/ri-demo --task reading
+```
+
+`researchinfra model check` is kept as a quick OpenAI-compatible environment
+check. All model commands report only secret presence, never secret values.
+Runtime OpenAI-compatible calls use:
 
 - `OPENAI_API_KEY`
 - `OPENAI_BASE_URL` optional

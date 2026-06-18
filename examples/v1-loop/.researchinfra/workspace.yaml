@@ -1,0 +1,77 @@
+schema_version: '0.1'
+name: v1-loop-demo
+description: Demonstration workspace for the ResearchInfra v1 loop.
+created_at: '2026-06-19T00:00:00+00:00'
+directories:
+  sources: sources
+  memory: memory
+  projects: projects
+  experiments: experiments
+  runs: runs
+  figures: figures
+  tables: tables
+  drafts: drafts
+  submissions: submissions
+  skills: skills
+  agents: agents
+  templates: templates
+  docs: docs
+model_providers:
+- id: openai-compatible
+  provider: openai-compatible
+  model: null
+  base_url: null
+  environment: {}
+  parameters: {}
+  enabled: false
+- id: ollama
+  provider: ollama
+  model: null
+  base_url: null
+  environment: {}
+  parameters: {}
+  enabled: false
+- id: litellm
+  provider: litellm
+  model: null
+  base_url: null
+  environment: {}
+  parameters: {}
+  enabled: false
+- id: anthropic
+  provider: anthropic
+  model: null
+  base_url: null
+  environment: {}
+  parameters: {}
+  enabled: false
+- id: openrouter
+  provider: openrouter
+  model: null
+  base_url: null
+  environment: {}
+  parameters: {}
+  enabled: false
+- id: vllm
+  provider: vllm
+  model: null
+  base_url: null
+  environment: {}
+  parameters: {}
+  enabled: false
+model_defaults: {}
+agent_backends:
+- id: manual
+  backend: manual
+  model_provider_id: null
+  command: []
+  working_directory: null
+  environment: {}
+  enabled: true
+- id: shell
+  backend: shell
+  model_provider_id: null
+  command: []
+  working_directory: null
+  environment: {}
+  enabled: false

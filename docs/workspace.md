@@ -16,7 +16,8 @@ memory/readings/       Saved paper reading notes and prompt-only artifacts
 projects/              Scoped research efforts
 experiments/           Experiment plans and baseline definitions
 runs/                  Concrete execution records
-figures/               Figures and tables
+figures/               Figures and visual artifacts
+tables/                Table registries linked to runs
 drafts/                Markdown and LaTeX drafts
 submissions/           Venue packaging and checklists
 skills/                Workspace-local research workflows
@@ -44,8 +45,15 @@ projects/<project-slug>/
   README.md
   context/
   experiments/
+  results/
+  tables/
+  figures/
+  claims/
   draft/
+  paper/
+  submissions/
   agents/tasks/
+  agents/results/
   reviews/
 ```
 
@@ -53,3 +61,11 @@ Experiment planning writes `experiment_plan.md`, `baseline_registry.yaml`,
 `ablation_matrix.yaml`, `run_registry.yaml`, and `claim_evidence.yaml` under the
 project. Draft scaffolds live under `draft/`, and agent task specs live under
 `agents/tasks/`.
+
+Result commands refresh `results/metrics.yaml`,
+`results/result_bundle.yaml`, and `results/summary.md` from run records.
+Tables live under `tables/`; figure registry placeholders live under
+`figures/`; claim checks write `claims/claim_report.md` and
+`claims/claim_evidence.yaml`. Paper commands write venue-local LaTeX files under
+`paper/<venue>/` and package outputs under `submissions/<venue>/<phase>/`.
+Agent executions write status records under `agents/results/`.

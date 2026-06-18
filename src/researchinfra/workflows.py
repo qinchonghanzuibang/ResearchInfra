@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import re
+import shlex
+import shutil
+import subprocess
 from pathlib import Path
 from textwrap import dedent
 
@@ -24,6 +27,7 @@ PROJECT_STATUSES = ("planning", "active", "paused", "submitted", "archived")
 DRAFT_SECTIONS = ("intro", "related_work", "method", "experiments", "limitations")
 TASK_TYPES = ("coding", "experiment", "writing", "review", "latex")
 VENUES = ("acl", "iclr", "neurips", "icml", "arxiv")
+AGENT_RUN_BACKENDS = ("manual", "shell", "codex", "claude-code", "openhands")
 
 
 class ProjectService:
@@ -49,7 +53,20 @@ class ProjectService:
         if (base / "project.yaml").exists():
             raise WorkflowError(f"Project already exists: {project_id}")
 
-        for directory in ("context", "experiments", "draft", "agents/tasks", "reviews"):
+        for directory in (
+            "context",
+            "experiments",
+            "results",
+            "tables",
+            "figures",
+            "claims",
+            "draft",
+            "paper",
+            "submissions",
+            "agents/tasks",
+            "agents/results",
+            "reviews",
+        ):
             (base / directory).mkdir(parents=True, exist_ok=True)
 
         _require_seed_artifacts(
@@ -250,8 +267,12 @@ class ProjectService:
                 - `project.yaml` stores project state.
                 - `context/` stores linked artifact context for skills and agents.
                 - `experiments/` stores plans, registries, run records, and claim evidence.
+                - `results/`, `tables/`, and `figures/` store run-grounded outputs.
+                - `claims/` stores claim reports and evidence maps.
                 - `draft/` stores outlines and section drafts.
+                - `paper/` and `submissions/` store LaTeX and packaging artifacts.
                 - `agents/tasks/` stores human-approved task specs.
+                - `agents/results/` stores execution records.
                 - `reviews/` stores review notes and checklists.
 
                 No results are claimed until linked to run records.
@@ -499,6 +520,7 @@ class AgentTaskService:
                 "Ask for human review before changing claims or submission artifacts.",
                 "Record outputs as local files and link them back to project evidence.",
             ],
+            safe_commands=[],
             verification_commands=_verification_commands(task_type),
             prompt=(
                 f"Prepare a {task_type} task for `{project.title}`. "
@@ -527,6 +549,130 @@ class AgentTaskService:
         if not path.exists():
             raise WorkflowError(f"Agent task not found: {task_id}")
         return AgentTask.model_validate(_read_yaml(path))
+
+    def run(
+        self,
+        *,
+        project_id: str,
+        task_id: str,
+        backend: str,
+        dry_run: bool = False,
+        yes: bool = False,
+    ) -> tuple[dict[str, object], Path | None]:
+        """Run or dry-run a task through a safe backend wrapper."""
+
+        if backend not in AGENT_RUN_BACKENDS:
+            raise WorkflowError(f"Unsupported agent backend: {backend}")
+        project = self.projects.get(project_id)
+        base = self.projects.path_for(project)
+        task = self.get(project_id=project.id, task_id=task_id)
+
+        if backend == "manual":
+            result = {
+                "task_id": task.id,
+                "backend": backend,
+                "status": "manual_instructions",
+                "instructions": _manual_instructions(task),
+                "stdout": "",
+                "stderr": "",
+                "returncode": 0,
+                "dry_run": dry_run,
+                "created_at": utc_now().isoformat(),
+            }
+            if dry_run:
+                return result, None
+            return result, self._write_result(base, task.id, backend, result)
+
+        if backend == "shell":
+            if not task.safe_commands:
+                result = _backend_result(
+                    task.id,
+                    backend,
+                    "blocked",
+                    "No safe_commands are declared in the task spec.",
+                    dry_run=dry_run,
+                )
+                if dry_run:
+                    return result, None
+                return result, self._write_result(base, task.id, backend, result)
+            if dry_run:
+                result = {
+                    "task_id": task.id,
+                    "backend": backend,
+                    "status": "dry_run",
+                    "commands": task.safe_commands,
+                    "message": "Shell backend would run only these task-declared commands.",
+                    "dry_run": True,
+                    "created_at": utc_now().isoformat(),
+                }
+                return result, None
+            if not yes:
+                raise WorkflowError(
+                    "Shell backend requires --yes after reviewing task.safe_commands."
+                )
+            results = []
+            for command in task.safe_commands:
+                completed = subprocess.run(
+                    shlex.split(command),
+                    cwd=self.workspace,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                results.append(
+                    {
+                        "command": command,
+                        "returncode": completed.returncode,
+                        "stdout": completed.stdout,
+                        "stderr": completed.stderr,
+                    }
+                )
+            status = "completed" if all(item["returncode"] == 0 for item in results) else "failed"
+            result = {
+                "task_id": task.id,
+                "backend": backend,
+                "status": status,
+                "commands": results,
+                "dry_run": False,
+                "created_at": utc_now().isoformat(),
+            }
+            return result, self._write_result(base, task.id, backend, result)
+
+        executable = _backend_executable(backend)
+        if shutil.which(executable) is None:
+            result = _backend_result(
+                task.id,
+                backend,
+                "missing_backend",
+                _backend_setup(backend),
+                dry_run=dry_run,
+            )
+            if dry_run:
+                return result, None
+            return result, self._write_result(base, task.id, backend, result)
+
+        result = _backend_result(
+            task.id,
+            backend,
+            "needs_configuration",
+            (
+                f"`{executable}` is available, but ResearchInfra requires an explicit backend "
+                "command configuration before automated execution."
+            ),
+            dry_run=dry_run,
+        )
+        if dry_run:
+            return result, None
+        return result, self._write_result(base, task.id, backend, result)
+
+    def _write_result(
+        self, project_base: Path, task_id: str, backend: str, result: dict[str, object]
+    ) -> Path:
+        results_dir = project_base / "agents" / "results"
+        results_dir.mkdir(parents=True, exist_ok=True)
+        path = results_dir / f"{task_id}-{backend}.yaml"
+        _write_yaml(path, result)
+        return path
 
 
 def _experiment_plan_markdown(project: Project, experiment: Experiment) -> str:
@@ -689,6 +835,75 @@ def _verification_commands(task_type: str) -> list[str]:
 
 def _suggested_backend(task_type: str) -> str:
     return "codex" if task_type in {"coding", "latex"} else "manual"
+
+
+def _manual_instructions(task: AgentTask) -> str:
+    return dedent(
+        f"""
+        # Manual Agent Task: {task.title}
+
+        - Task ID: `{task.id}`
+        - Type: `{task.task_type or "unknown"}`
+        - Project: `{task.project_id or "unknown"}`
+
+        ## Prompt
+
+        {task.prompt or "No prompt is recorded."}
+
+        ## Context Files
+
+        {_bullet_list(task.context_files)}
+
+        ## Expected Outputs
+
+        {_bullet_list(task.expected_outputs)}
+
+        ## Constraints
+
+        {_bullet_list(task.constraints)}
+
+        ## Verification
+
+        {_bullet_list(task.verification_commands)}
+        """
+    ).strip()
+
+
+def _backend_executable(backend: str) -> str:
+    return {
+        "codex": "codex",
+        "claude-code": "claude",
+        "openhands": "openhands",
+    }[backend]
+
+
+def _backend_setup(backend: str) -> str:
+    return {
+        "codex": "Install and authenticate the Codex CLI, then configure an explicit command.",
+        "claude-code": "Install Claude Code, authenticate it, then configure an explicit command.",
+        "openhands": "Install OpenHands locally, then configure an explicit command.",
+    }[backend]
+
+
+def _backend_result(
+    task_id: str,
+    backend: str,
+    status: str,
+    message: str,
+    *,
+    dry_run: bool,
+) -> dict[str, object]:
+    return {
+        "task_id": task_id,
+        "backend": backend,
+        "status": status,
+        "message": message,
+        "stdout": "",
+        "stderr": "",
+        "returncode": 2 if status in {"blocked", "missing_backend"} else 0,
+        "dry_run": dry_run,
+        "created_at": utc_now().isoformat(),
+    }
 
 
 def _validate_section(section: str) -> None:

@@ -1,0 +1,33 @@
+id: project-evidence-loop
+title: Evidence Loop
+description: Demonstrate the ResearchInfra v1 loop with local files.
+thesis: ResearchInfra should make evidence links inspectable before claims or submissions.
+research_question: How can a local workspace preserve links across research artifacts?
+motivation: Agents and humans need the same durable research state.
+status: planning
+ideas:
+- idea-evidence-loop
+papers:
+- paper-demo-source
+readings:
+- reading-demo-source
+claims:
+- The demo workspace contains smoke-check run run-0001.
+experiments:
+- experiment-evidence-loop-001
+artifacts:
+- paper:paper-demo-source
+- reading:reading-demo-source
+- idea:idea-evidence-loop
+open_questions:
+- Which claims require paper evidence versus run evidence?
+decisions:
+- Keep this demo provider-free and dry-run friendly.
+risks:
+- Demo smoke metrics must not be mistaken for scientific results.
+next_actions:
+- Review claim report before drafting.
+target_venue: arxiv
+owner: null
+created_at: '2026-06-19T00:00:00+00:00'
+updated_at: '2026-06-19T00:00:00+00:00'

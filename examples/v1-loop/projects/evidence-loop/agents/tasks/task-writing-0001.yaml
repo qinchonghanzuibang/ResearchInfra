@@ -1,0 +1,25 @@
+id: task-writing-0001
+title: Review demo claim report
+task_type: writing
+project_id: project-evidence-loop
+backend: manual
+suggested_backend: manual
+context_files:
+- projects/evidence-loop/project.yaml
+- projects/evidence-loop/claims/claim_report.md
+expected_outputs:
+- Review notes on unsupported claims.
+constraints:
+- Do not fabricate citations, metrics, baselines, or results.
+- Treat the smoke-check run as a demo registry artifact only.
+safe_commands: []
+verification_commands:
+- researchinfra claim check --project project-evidence-loop --workspace examples/v1-loop --dry-run
+prompt: Review the demo claim report and identify any unsupported claim language.
+status: queued
+inputs: {}
+outputs: {}
+requires_human_approval: true
+created_at: '2026-06-19T00:00:00+00:00'
+completed_at: null
+

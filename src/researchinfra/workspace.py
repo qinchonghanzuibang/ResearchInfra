@@ -36,6 +36,7 @@ WORKSPACE_DIRECTORIES: tuple[str, ...] = (
     "experiments/baselines",
     "runs",
     "figures",
+    "tables",
     "drafts",
     "submissions",
     "skills",
@@ -100,8 +101,10 @@ def default_workspace_config(name: str) -> WorkspaceConfig:
             ModelProviderConfig(id="openrouter", provider="openrouter"),
             ModelProviderConfig(id="vllm", provider="vllm"),
         ],
+        model_defaults={},
         agent_backends=[
             AgentBackendConfig(id="manual", backend="manual", enabled=True),
+            AgentBackendConfig(id="shell", backend="shell"),
             AgentBackendConfig(id="api", backend="api"),
             AgentBackendConfig(id="codex", backend="codex"),
             AgentBackendConfig(id="claude-code", backend="claude-code"),
@@ -184,6 +187,7 @@ def _write_directory_guides(workspace_path: Path) -> None:
         "experiments/README.md": "Track planned experiments and baselines before runs.",
         "runs/README.md": "Store immutable run records, metrics, logs, and artifact pointers.",
         "figures/README.md": "Store figures and tables linked from claims, runs, and drafts.",
+        "tables/README.md": "Store table registries linked to explicit run records.",
         "drafts/README.md": "Store outlines, Markdown drafts, LaTeX drafts, and evidence maps.",
         "submissions/README.md": "Store venue packaging checklists and submission artifacts.",
         "agents/README.md": "Store agent backend configs and task records with human approval.",
@@ -268,7 +272,7 @@ def _write_venue_templates(workspace_path: Path) -> None:
 
 
 def _write_agent_placeholders(workspace_path: Path) -> None:
-    for backend in ("manual", "api", "codex", "claude-code", "openhands", "openclaw"):
+    for backend in ("manual", "shell", "api", "codex", "claude-code", "openhands", "openclaw"):
         _write_yaml(
             workspace_path / "agents" / "backends" / f"{backend}.yaml",
             {

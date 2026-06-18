@@ -1,0 +1,17 @@
+project_id: project-evidence-loop
+experiment_id: experiment-evidence-loop-001
+runs:
+- id: run-0001
+  experiment_id: experiment-evidence-loop-001
+  command: null
+  status: completed
+  seed: null
+  metrics:
+    smoke_check: passed
+  artifacts: []
+  notes: Demonstration smoke metric recorded to exercise registries; not a scientific result.
+  started_at: null
+  finished_at: '2026-06-19T00:00:00+00:00'
+warnings:
+- Only user-provided demonstration metadata is recorded here.
+

@@ -1,0 +1,15 @@
+project_id: project-evidence-loop
+generated_at: '2026-06-19T00:00:00+00:00'
+claims:
+- claim_id: claim-0001
+  text: The demo workspace contains smoke-check run `run-0001`.
+  status: supported
+  evidence:
+  - kind: run
+    ref: run-0001
+    note: null
+  warnings: []
+warnings:
+- Missing baselines: comparison claims are not supported yet.
+- Missing OOD/ablation evidence: robustness claims need more support.
+

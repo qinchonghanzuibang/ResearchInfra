@@ -17,16 +17,20 @@ from researchinfra.schemas import (
     Experiment,
     ExperimentPlan,
     Feed,
+    FigureRecord,
     Idea,
     InboxItem,
+    MetricRecord,
     ModelProviderConfig,
     Paper,
     Project,
+    ResultBundle,
     ResultRecord,
     Review,
     Run,
     Skill,
     Source,
+    TableRecord,
     WorkspaceConfig,
 )
 
@@ -59,6 +63,38 @@ def test_core_schemas_validate_minimal_objects() -> None:
         id="result:example",
         experiment_id=experiment.id,
         metrics={"accuracy": 0.5},
+    )
+    metric = MetricRecord(
+        id="metric:example",
+        project_id=project.id,
+        experiment_id=experiment.id,
+        run_id=run.id,
+        name="accuracy",
+        value=0.5,
+        evidence=[EvidenceLink(kind="run", ref=run.id)],
+    )
+    table = TableRecord(
+        id="table:example",
+        project_id=project.id,
+        title="Results",
+        path="projects/demo/tables/results.md",
+        source_run_ids=[run.id],
+        columns=["run_id", "accuracy"],
+        rows=[{"run_id": run.id, "accuracy": 0.5}],
+    )
+    figure = FigureRecord(
+        id="figure:example",
+        project_id=project.id,
+        title="Learning curve",
+        path="projects/demo/figures/learning-curve.md",
+        input_run_ids=[run.id],
+    )
+    bundle = ResultBundle(
+        id="result-bundle:example",
+        project_id=project.id,
+        metrics=[metric],
+        tables=[table.path],
+        figures=[figure.path],
     )
     draft = Draft(id="draft:example", title="Draft", claims=[claim.id])
     review = Review(id="review:example", reviewer="human")
@@ -103,6 +139,7 @@ def test_core_schemas_validate_minimal_objects() -> None:
         context_files=["projects/demo/project.yaml"],
         expected_outputs=["draft"],
         constraints=["Do not fabricate results."],
+        safe_commands=[],
         verification_commands=["python -m pytest"],
     )
     skill = Skill(
@@ -125,6 +162,10 @@ def test_core_schemas_validate_minimal_objects() -> None:
     assert experiment_plan.ablations[0].factor == "data_quality"
     assert run.metrics["status"] == "not_run"
     assert result.metrics["accuracy"] == 0.5
+    assert metric.evidence[0].ref == run.id
+    assert table.rows[0]["accuracy"] == 0.5
+    assert figure.input_run_ids == [run.id]
+    assert bundle.tables == [table.path]
     assert draft.status == "outline"
     assert review.decision == "no_decision"
     assert source.source_type == "web"

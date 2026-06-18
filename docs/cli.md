@@ -171,13 +171,25 @@ an explicit prompt-only artifact rather than inventing a reading.
 
 ## Models
 
-Check provider configuration without exposing secrets:
+List workspace providers and set task-specific defaults:
 
 ```bash
+researchinfra model list --workspace /tmp/ri-demo
+researchinfra model set-default \
+  --workspace /tmp/ri-demo \
+  --task reading \
+  --provider openai-compatible \
+  --model gpt-4o-mini
+researchinfra model test --workspace /tmp/ri-demo --task reading
 researchinfra model check
 ```
 
-Supported environment variables:
+`model test` performs a local readiness check and prints setup instructions when
+a provider is missing, uninstalled, or unconfigured. It never prints API key
+values. Supported provider kinds are `openai-compatible`, `litellm`, `ollama`,
+`anthropic`, `openrouter`, and `vllm`.
+
+OpenAI-compatible runtime calls use:
 
 - `OPENAI_API_KEY`
 - `OPENAI_BASE_URL` optional
@@ -226,7 +238,8 @@ researchinfra project add-reading project-grounded-evaluation-study reading-... 
 ```
 
 Projects live under `projects/<project-slug>/` with `project.yaml`, `README.md`,
-`context/`, `experiments/`, `draft/`, `agents/`, and `reviews/`.
+`context/`, `experiments/`, `results/`, `tables/`, `figures/`, `claims/`,
+`draft/`, `paper/`, `submissions/`, `agents/`, and `reviews/`.
 
 ## Experiments
 
@@ -259,6 +272,61 @@ researchinfra experiment add-run \
 
 ResearchInfra does not invent baselines, datasets, metrics, or results.
 
+## Results, Tables, And Figures
+
+Refresh and summarize run-grounded result registries:
+
+```bash
+researchinfra result list \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo
+researchinfra result summarize \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo
+```
+
+Create a Markdown/YAML table from recorded runs:
+
+```bash
+researchinfra table create \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo \
+  --from-runs
+```
+
+Create a figure registry placeholder linked to available run IDs:
+
+```bash
+researchinfra figure create \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo \
+  --title "Evidence Flow"
+```
+
+These commands write under `projects/<project-slug>/results/`, `tables/`, and
+`figures/`. Tables only use values already present in run records; figure
+records do not generate plots or visual claims.
+
+## Claims
+
+List and check project claims:
+
+```bash
+researchinfra claim list \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo
+researchinfra claim check \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo \
+  --draft projects/grounded-evaluation-study/draft/outline.md \
+  --dry-run
+```
+
+Without `--dry-run`, claim checks write `claims/claim_report.md` and
+`claims/claim_evidence.yaml`, plus a project experiment evidence map. The check
+warns about unsupported claims, comparison overclaims, missing baselines,
+missing OOD/ablation evidence, and result claims without run IDs.
+
 ## Drafts
 
 Render or write evidence-gated draft scaffolds:
@@ -278,6 +346,36 @@ researchinfra draft section \
 Draft outputs live under `projects/<project-slug>/draft/` and include warnings
 for missing evidence and missing experiments.
 
+## Paper And Submission
+
+Initialize, check, build, and package project-local paper files:
+
+```bash
+researchinfra paper init \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo \
+  --venue arxiv
+researchinfra paper check \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo \
+  --venue arxiv
+researchinfra paper build \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo \
+  --venue arxiv
+researchinfra paper package \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo \
+  --venue arxiv \
+  --arxiv
+```
+
+Supported placeholders are `acl`, `iclr`, `neurips`, `icml`, and `arxiv`.
+Checks look for missing sections, missing citations, broken references, missing
+results, unsupported claims, anonymous/camera-ready metadata issues, and local
+LaTeX tools. Build fails gracefully with setup instructions if `latexmk` or
+`pdflatex` is unavailable.
+
 ## Agent Tasks
 
 Create task specs for future human-approved backend execution:
@@ -294,9 +392,17 @@ researchinfra agent task list \
 researchinfra agent task show task-writing-0001 \
   --project project-grounded-evaluation-study \
   --workspace /tmp/ri-demo
+researchinfra agent run task-writing-0001 \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo \
+  --backend manual \
+  --dry-run
 ```
 
 Task specs live under `projects/<project-slug>/agents/tasks/` and record context
 files, expected outputs, constraints, verification commands, and suggested
-backend. ResearchInfra does not run Codex, Claude Code, OpenHands, or other
-backends from these commands yet.
+backend. Manual runs print instructions and non-dry runs write
+`agents/results/<task-id>-manual.yaml`. The shell backend can run only
+`safe_commands` already present in the task spec, and only with `--yes`.
+Codex, Claude Code, and OpenHands wrappers report setup/configuration guidance
+unless an explicit local command bridge is configured.

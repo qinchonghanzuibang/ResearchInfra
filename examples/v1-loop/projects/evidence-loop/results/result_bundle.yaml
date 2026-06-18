@@ -1,0 +1,23 @@
+id: result-bundle-evidence-loop
+project_id: project-evidence-loop
+metrics:
+- id: metric-run-0001-smoke-check
+  project_id: project-evidence-loop
+  experiment_id: experiment-evidence-loop-001
+  run_id: run-0001
+  name: smoke_check
+  value: passed
+  unit: null
+  source_path: projects/evidence-loop/experiments/run_registry.yaml
+  evidence:
+  - kind: run
+    ref: run-0001
+    note: null
+  created_at: '2026-06-18T17:22:06.588892Z'
+tables:
+- projects/evidence-loop/tables/table-runs.yaml
+figures:
+- projects/evidence-loop/figures/figure-evidence-flow.yaml
+warnings: []
+created_at: '2026-06-18T17:22:06.589152Z'
+updated_at: '2026-06-18T17:22:06.589152Z'

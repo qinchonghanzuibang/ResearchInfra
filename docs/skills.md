@@ -91,3 +91,7 @@ researchinfra skill run read_deep --workspace /tmp/ri-demo --input src-... --dry
 ```
 
 Use `--dry-run` to inspect a rendered prompt before any model call.
+
+Project commands can use skills to render prompts, but the v1 registry commands
+for results, claims, paper checks, and agent execution are file-first workflows.
+They do not require API keys and are suitable for demos and CI dry runs.

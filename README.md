@@ -37,6 +37,13 @@ experiment tracker. It is a clean substrate for serious research infrastructure.
   project-local context, experiment, draft, agent, and review directories.
 - Experiment planning registries, draft outline/section scaffolds, and agent
   task specs that preserve evidence and human approval gates.
+- Model provider registry commands for listing providers, setting task-specific
+  defaults, and checking readiness without printing secrets.
+- Result, table, figure, and claim registries that trace values back to run IDs
+  and warn when evidence is missing.
+- Paper initialization, checks, LaTeX build hooks, and local submission
+  packaging for ACL, NeurIPS, ICLR, ICML, and arXiv placeholders.
+- Manual and shell-safe agent execution bridges that write task result records.
 - Optional OpenAI-compatible model calls through environment variables.
 - Paper Card and Idea Card generation as Markdown plus YAML metadata.
 - Pydantic schemas for core research objects:
@@ -44,7 +51,8 @@ experiment tracker. It is a clean substrate for serious research infrastructure.
   `Draft`, `Review`, `AgentTask`, `ModelProviderConfig`, and
   `AgentBackendConfig`.
 - A file-first workspace layout for sources, memory, projects, experiments,
-  runs, figures, drafts, submissions, skills, agents, templates, and docs.
+  runs, figures, tables, drafts, submissions, skills, agents, templates, and
+  docs.
 - Agent backend interfaces with placeholder adapters for manual, API, Codex,
   Claude Code, OpenHands, and OpenClaw workflows.
 - Model provider interfaces with placeholder adapters for OpenAI-compatible
@@ -52,208 +60,73 @@ experiment tracker. It is a clean substrate for serious research infrastructure.
 - Skill directory conventions for reading, ideation, experiment planning,
   writing, reviewing, LaTeX, and submission support.
 - Venue template placeholders for ACL, NeurIPS, ICLR, ICML, and arXiv.
-- Example workspaces for data-centric MLLM research and VLA/world-model
-  research.
+- Example workspaces for data-centric MLLM research, VLA/world-model research,
+  and the complete v1 loop.
 
 ## Quickstart
 
-Choose one setup workflow.
-
-With standard `pip` and `venv`:
-
 ```bash
-python3.12 -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 researchinfra --help
 researchinfra init my-research
-```
-
-With `uv`:
-
-```bash
-uv venv --python 3.12
-source .venv/bin/activate
-uv pip install -e ".[dev]"
-uv run researchinfra --help
-uv run researchinfra init my-research
-```
-
-With `conda`:
-
-```bash
-conda env create -f environment.yml
-conda activate researchinfra
-researchinfra --help
-researchinfra init my-research
-```
-
-The generated workspace is a normal directory:
-
-```text
-my-research/
-  .researchinfra/workspace.yaml
-  sources/
-  memory/
-  projects/
-  experiments/
-  runs/
-  figures/
-  drafts/
-  submissions/
-  skills/
-  agents/
-  templates/
-  docs/
-```
-
-ResearchInfra does not require a specific LLM provider. The default workspace
-contains disabled provider placeholders and a manual backend. You can wire real
-providers and agents later without changing the research object model.
-
-## Local Workflow Demo
-
-Create a workspace and register a source:
-
-```bash
-researchinfra init /tmp/ri-demo --force
-researchinfra source add https://arxiv.org/abs/1234.5678 \
-  --workspace /tmp/ri-demo \
-  --type paper \
-  --title "Demo Paper" \
-  --tags demo,arxiv
-researchinfra source list --workspace /tmp/ri-demo
-```
-
-Dry-run a built-in skill to inspect the rendered prompt before any model call:
-
-```bash
-researchinfra skill list --workspace /tmp/ri-demo
-researchinfra skill list --workspace /tmp/ri-demo --category reading
-researchinfra skill show paper_card --workspace /tmp/ri-demo
-researchinfra skill run paper_card \
-  --workspace /tmp/ri-demo \
-  --input src-... \
-  --dry-run
-```
-
-Model calls are optional and use OpenAI-compatible environment variables:
-
-```bash
-export OPENAI_API_KEY=...
-export OPENAI_BASE_URL=https://api.openai.com/v1  # optional
-export OPENAI_MODEL=gpt-4o-mini                   # optional
-researchinfra model check
-```
-
-Create file-first cards:
-
-```bash
-researchinfra paper create-card src-... --workspace /tmp/ri-demo
-researchinfra idea generate --workspace /tmp/ri-demo --from-paper paper-...
-```
-
-Paper Cards are written under `memory/papers/`; Idea Cards are written under
-`memory/ideas/`. Generated cards include an explicit warning when they are based
-only on limited metadata rather than full paper text. ResearchInfra does not
-fabricate experiments, citations, results, or paper content.
-
-## Discovery Workflow
-
-Configure feeds, sync them into the review inbox, and promote only the items you
-want to keep:
-
-```bash
-researchinfra init /tmp/ri-demo --force
-researchinfra feed add \
-  --workspace /tmp/ri-demo \
-  --type arxiv \
-  --name "MLLM papers" \
-  --query 'cat:cs.CV AND "multimodal"'
-researchinfra feed sync --workspace /tmp/ri-demo --limit 5
-researchinfra inbox list --workspace /tmp/ri-demo
-researchinfra inbox show inbox-... --workspace /tmp/ri-demo
-researchinfra inbox promote inbox-... --workspace /tmp/ri-demo
-researchinfra source enrich src-... --workspace /tmp/ri-demo
-researchinfra source extract src-... --workspace /tmp/ri-demo
-researchinfra document list --workspace /tmp/ri-demo
-researchinfra paper create-card src-... --workspace /tmp/ri-demo
-```
-
-Feeds and inbox items are stored as local YAML files under `.researchinfra/`.
-arXiv and RSS/Atom sync extract lightweight metadata only: title, URL, authors,
-abstract or summary, published date, external id, PDF URL when available, and
-tags. ResearchInfra does not download PDFs or scrape web pages during discovery.
-
-## Content Extraction
-
-Extract source content before creating evidence-grounded cards:
-
-```bash
-researchinfra source extract src-... --workspace /tmp/ri-demo
-researchinfra document show doc-... --workspace /tmp/ri-demo
-researchinfra document chunks doc-... --workspace /tmp/ri-demo --limit 3
-researchinfra paper read src-... \
-  --workspace /tmp/ri-demo \
-  --mode deep \
-  --dry-run
-researchinfra paper create-card src-... \
-  --workspace /tmp/ri-demo \
-  --use-content \
-  --dry-run
-```
-
-Extracted text is stored under `memory/documents/<document-id>/text.md`;
-document metadata is stored in `memory/documents/<document-id>/metadata.yaml`.
-Reading outputs are stored under `memory/readings/<reading-id>/notes.md` with
-metadata in `metadata.yaml`. Paper Card prompts with `--use-content` and paper
-reading prompts include document chunks and explicit instructions to cite
-evidence spans by document and chunk id.
-
-## End-To-End V1 Workflow
-
-The v1 workflow turns local evidence into a project without inventing results:
-
-```bash
-researchinfra source extract src-... --workspace /tmp/ri-demo
-researchinfra paper create-card src-... --workspace /tmp/ri-demo --use-content
-researchinfra paper read src-... --workspace /tmp/ri-demo --mode idea
-researchinfra idea generate --workspace /tmp/ri-demo --from-paper paper-...
-
 researchinfra project create \
-  --workspace /tmp/ri-demo \
-  --name "Grounded Evaluation Study" \
-  --from-paper paper-... \
-  --from-reading reading-... \
-  --from-idea idea-...
-researchinfra project status project-grounded-evaluation-study --workspace /tmp/ri-demo
+  --workspace my-research \
+  --name "Grounded Evaluation Study"
 
 researchinfra experiment plan \
   --project project-grounded-evaluation-study \
-  --workspace /tmp/ri-demo \
-  --dry-run
-researchinfra experiment plan \
+  --workspace my-research
+researchinfra experiment add-run \
   --project project-grounded-evaluation-study \
-  --workspace /tmp/ri-demo
+  --workspace my-research \
+  --experiment experiment-grounded-evaluation-study-001 \
+  --metric smoke_check=passed
 
-researchinfra draft outline \
+researchinfra result summarize \
   --project project-grounded-evaluation-study \
-  --workspace /tmp/ri-demo \
-  --venue acl \
+  --workspace my-research
+researchinfra table create \
+  --project project-grounded-evaluation-study \
+  --workspace my-research \
+  --from-runs
+researchinfra claim check \
+  --project project-grounded-evaluation-study \
+  --workspace my-research \
   --dry-run
-researchinfra agent task create \
+researchinfra paper init \
   --project project-grounded-evaluation-study \
-  --workspace /tmp/ri-demo \
-  --type writing \
-  --title "Draft limitations section"
+  --workspace my-research \
+  --venue arxiv
+researchinfra paper check \
+  --project project-grounded-evaluation-study \
+  --workspace my-research \
+  --venue arxiv
 ```
 
 Project state lives under `projects/<project-slug>/`. Experiment files are
-written under `experiments/`, draft scaffolds under `draft/`, and agent task
-specs under `agents/tasks/`. These artifacts are intentionally conservative:
-they warn about missing evidence, missing experiments, and unsupported claims.
+written under `experiments/`, results under `results/`, tables under `tables/`,
+figures under `figures/`, claim reports under `claims/`, paper files under
+`paper/`, submissions under `submissions/`, and agent records under `agents/`.
 Metrics enter the workspace only through explicit run records such as
-`researchinfra experiment add-run --metric name=value`.
+`researchinfra experiment add-run --metric name=value`; the `smoke_check`
+example above is a workflow check, not a scientific result.
+
+ResearchInfra does not require a specific LLM provider. The default workspace
+contains disabled provider placeholders and a manual backend. Inspect them with:
+
+```bash
+researchinfra model list --workspace my-research
+researchinfra model set-default \
+  --workspace my-research \
+  --task reading \
+  --provider openai-compatible \
+  --model gpt-4o-mini
+researchinfra model test --workspace my-research --task reading
+```
+
+Provider checks never print API keys.
 
 ## Architecture
 
@@ -263,6 +136,9 @@ ResearchInfra separates durable research state from execution.
   human-readable files.
 - **Workspace initialization** creates a predictable local directory structure
   with starter documentation and placeholders.
+- **Registries** preserve papers, readings, projects, runs, metrics, tables,
+  figures, claims, drafts, paper checks, submissions, and agent results as local
+  files.
 - **Agent backends** describe how tasks may be routed to a human, local command,
   API service, or agent tool.
 - **Model providers** describe how model inference can be supplied by OpenAI
@@ -278,6 +154,8 @@ See [docs/architecture.md](docs/architecture.md) for the longer design.
   studying data quality, coverage, and evaluation design for multimodal LLMs.
 - [examples/vla-world-model](examples/vla-world-model) shows a workspace for
   vision-language-action and world-model research planning.
+- [examples/v1-loop](examples/v1-loop) shows the complete dry-run v1 loop from
+  source notes through claim checks, paper checks, and an agent task result.
 
 Both examples are intentionally evidence-light. They show structure, not fake
 scientific results.
@@ -312,13 +190,12 @@ The package keeps dependencies small:
 
 ## Roadmap
 
-- Durable file readers and writers for every schema.
 - Import pipelines for BibTeX, PDFs, arXiv metadata, and paper notes.
-- Claim-to-evidence maps for drafts and figures.
 - Richer experiment and run record helpers with immutable audit trails.
-- Agent task queues with backend execution behind explicit human approval gates.
+- Stronger claim extraction and evidence classification for real drafts.
+- Agent task queues and configured external backend command runners.
 - Real provider adapters and local command backends.
-- Venue-aware submission packaging.
+- Official venue template importers and stricter submission packaging.
 - Reproducibility checks across papers, claims, experiments, and drafts.
 
 ResearchInfra should grow as a dependable research substrate, not as a monolith.

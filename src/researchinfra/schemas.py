@@ -293,6 +293,62 @@ class ResultRecord(ResearchInfraModel):
     created_at: datetime = Field(default_factory=utc_now)
 
 
+class MetricRecord(ResearchInfraModel):
+    """A single metric value grounded in an explicit run record."""
+
+    id: str = Field(..., min_length=1)
+    project_id: str = Field(..., min_length=1)
+    experiment_id: str = Field(..., min_length=1)
+    run_id: str = Field(..., min_length=1)
+    name: str = Field(..., min_length=1)
+    value: MetricValue
+    unit: str | None = None
+    source_path: str | None = None
+    evidence: list[EvidenceLink] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class TableRecord(ResearchInfraModel):
+    """A table registry entry whose cells trace back to run records."""
+
+    id: str = Field(..., min_length=1)
+    project_id: str = Field(..., min_length=1)
+    title: str = Field(..., min_length=1)
+    path: str = Field(..., min_length=1)
+    source_run_ids: list[str] = Field(default_factory=list)
+    columns: list[str] = Field(default_factory=list)
+    rows: list[dict[str, MetricValue]] = Field(default_factory=list)
+    cell_evidence: dict[str, list[EvidenceLink]] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class FigureRecord(ResearchInfraModel):
+    """A figure registry entry with explicit inputs instead of generated claims."""
+
+    id: str = Field(..., min_length=1)
+    project_id: str = Field(..., min_length=1)
+    title: str = Field(..., min_length=1)
+    path: str = Field(..., min_length=1)
+    input_run_ids: list[str] = Field(default_factory=list)
+    input_paths: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class ResultBundle(ResearchInfraModel):
+    """Project-local result registry summarizing run-grounded artifacts."""
+
+    id: str = Field(..., min_length=1)
+    project_id: str = Field(..., min_length=1)
+    metrics: list[MetricRecord] = Field(default_factory=list)
+    tables: list[str] = Field(default_factory=list)
+    figures: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
 class ClaimEvidenceLink(ResearchInfraModel):
     """A claim-to-evidence mapping used to gate drafts and results."""
 
@@ -381,6 +437,7 @@ class AgentTask(ResearchInfraModel):
     context_files: list[str] = Field(default_factory=list)
     expected_outputs: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
+    safe_commands: list[str] = Field(default_factory=list)
     verification_commands: list[str] = Field(default_factory=list)
     prompt: str | None = None
     status: Literal["queued", "running", "needs_review", "completed", "failed", "cancelled"] = (
@@ -435,7 +492,7 @@ class ModelProviderConfig(ResearchInfraModel):
     enabled: bool = False
 
 
-BackendKind = Literal["manual", "api", "codex", "claude-code", "openhands", "openclaw"]
+BackendKind = Literal["manual", "shell", "api", "codex", "claude-code", "openhands", "openclaw"]
 
 
 class AgentBackendConfig(ResearchInfraModel):
@@ -459,4 +516,5 @@ class WorkspaceConfig(ResearchInfraModel):
     created_at: datetime = Field(default_factory=utc_now)
     directories: dict[str, str] = Field(default_factory=dict)
     model_providers: list[ModelProviderConfig] = Field(default_factory=list)
+    model_defaults: dict[str, str] = Field(default_factory=dict)
     agent_backends: list[AgentBackendConfig] = Field(default_factory=list)

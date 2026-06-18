@@ -1,0 +1,14 @@
+sources:
+- id: src-demo-source
+  source_type: note
+  target: sources/demo-source.md
+  title: Demo Source Note
+  abstract: Local note used to demonstrate file-first evidence flow.
+  authors: []
+  tags:
+  - demo
+  - evidence
+  raw_metadata: {}
+  created_at: '2026-06-19T00:00:00+00:00'
+  updated_at: '2026-06-19T00:00:00+00:00'
+

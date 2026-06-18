@@ -58,6 +58,13 @@ before implementation, but they are not evidence until linked to run records.
 A result record stores user-provided run metrics and artifacts. ResearchInfra
 does not generate fake results.
 
+## Metric, Table, Figure, And Result Bundle
+
+A metric record is a single value copied from a run record. A table record
+stores rows and cell evidence linked to run IDs. A figure record stores inputs
+and warnings for a visual artifact, but does not generate a plot. A result
+bundle summarizes the project-local metrics, tables, figures, and warnings.
+
 ## Run
 
 A run is an execution record for an experiment. Runs store commands, status,
@@ -68,8 +75,16 @@ seeds, metrics, artifacts, notes, and timestamps.
 A draft is a paper, report, or submission artifact. Drafts should link claims to
 explicit evidence.
 
+## Paper And Submission
+
+Project-local paper files live under `paper/<venue>/`. Submission packages live
+under `submissions/<venue>/<phase>/`. Checks look for missing sections,
+citations, results, claim support, references, and venue metadata issues.
+
 ## Agent Task
 
 An agent task is a human-approved work item for a manual or automated backend.
 Task specs include context files, expected outputs, constraints, verification
 commands, and a suggested backend. Creating a task does not execute the backend.
+Manual or shell-safe execution writes a task result record so humans and agents
+can audit what happened.

@@ -1,0 +1,12 @@
+id: figure-evidence-flow
+project_id: project-evidence-loop
+title: Evidence Flow
+path: projects/evidence-loop/figures/figure-evidence-flow.md
+input_run_ids:
+- run-0001
+input_paths:
+- projects/evidence-loop/experiments/run_registry.yaml
+warnings:
+- Placeholder registry only; no visual artifact is generated.
+created_at: '2026-06-19T00:00:00+00:00'
+

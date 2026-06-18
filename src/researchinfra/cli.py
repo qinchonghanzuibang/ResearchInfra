@@ -10,6 +10,7 @@ import yaml
 
 from researchinfra import __version__
 from researchinfra.cards import CardError, IdeaCardService, PaperCardService
+from researchinfra.claims import ClaimService
 from researchinfra.discovery import (
     DiscoveryError,
     FeedNotFoundError,
@@ -25,13 +26,17 @@ from researchinfra.documents import (
     DocumentNotFoundError,
     DocumentStore,
 )
+from researchinfra.model_registry import MODEL_TASKS, ModelRegistry, ModelRegistryError
 from researchinfra.models.adapters import OpenAICompatibleProvider
 from researchinfra.models.base import ModelProviderConfigurationError, ModelProviderRequestError
 from researchinfra.readings import ReadingError, ReadingService
+from researchinfra.results import ResultRegistry
 from researchinfra.schemas import ModelProviderConfig
 from researchinfra.skills import READING_MODES, SkillError, SkillNotFoundError, SkillRunner
 from researchinfra.sources import SourceNotFoundError, SourceRegistry
+from researchinfra.submission import SubmissionService
 from researchinfra.workflows import (
+    AGENT_RUN_BACKENDS,
     DRAFT_SECTIONS,
     TASK_TYPES,
     VENUES,
@@ -190,6 +195,18 @@ def build_parser() -> argparse.ArgumentParser:
     model_parser = subparsers.add_parser("model", help="Inspect model provider configuration.")
     model_subparsers = model_parser.add_subparsers(dest="model_command")
     model_subparsers.add_parser("check", help="Check OpenAI-compatible provider configuration.")
+    model_list = model_subparsers.add_parser("list", help="List workspace model providers.")
+    model_list.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    model_default = model_subparsers.add_parser(
+        "set-default", help="Set the default provider/model for a task."
+    )
+    model_default.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    model_default.add_argument("--task", required=True, choices=MODEL_TASKS)
+    model_default.add_argument("--provider", required=True, help="Provider id or kind.")
+    model_default.add_argument("--model", required=True, help="Model name.")
+    model_test = model_subparsers.add_parser("test", help="Check provider readiness.")
+    model_test.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    model_test.add_argument("--task", choices=MODEL_TASKS)
 
     paper_parser = subparsers.add_parser("paper", help="Create and inspect paper artifacts.")
     paper_subparsers = paper_parser.add_subparsers(dest="paper_command")
@@ -220,6 +237,33 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print the rendered reading prompt instead of writing reading notes.",
     )
+    paper_init = paper_subparsers.add_parser("init", help="Initialize a project paper template.")
+    paper_init.add_argument("--project", required=True, help="Project id or slug.")
+    paper_init.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    paper_init.add_argument("--venue", required=True, choices=VENUES)
+
+    paper_build = paper_subparsers.add_parser("build", help="Build a project paper if TeX exists.")
+    paper_build.add_argument("--project", required=True, help="Project id or slug.")
+    paper_build.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    paper_build.add_argument("--venue", choices=VENUES)
+
+    paper_check = paper_subparsers.add_parser("check", help="Check paper readiness.")
+    paper_check.add_argument("--project", required=True, help="Project id or slug.")
+    paper_check.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    paper_check.add_argument("--venue", choices=VENUES)
+
+    paper_package = paper_subparsers.add_parser("package", help="Package local submission files.")
+    paper_package.add_argument("--project", required=True, help="Project id or slug.")
+    paper_package.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    paper_package.add_argument("--venue", choices=VENUES)
+    paper_phase = paper_package.add_mutually_exclusive_group()
+    paper_phase.add_argument("--anonymous", action="store_true", help="Package anonymous draft.")
+    paper_phase.add_argument(
+        "--camera-ready",
+        action="store_true",
+        help="Package camera-ready files.",
+    )
+    paper_phase.add_argument("--arxiv", action="store_true", help="Package arXiv files.")
 
     idea_parser = subparsers.add_parser("idea", help="Generate research idea artifacts.")
     idea_subparsers = idea_parser.add_subparsers(dest="idea_command")
@@ -296,6 +340,44 @@ def build_parser() -> argparse.ArgumentParser:
         help="Metric as name=value. Repeat for multiple metrics.",
     )
 
+    result_parser = subparsers.add_parser("result", help="Inspect project results.")
+    result_subparsers = result_parser.add_subparsers(dest="result_command")
+    result_list = result_subparsers.add_parser("list", help="List run-grounded results.")
+    result_list.add_argument("--project", required=True, help="Project id or slug.")
+    result_list.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    result_summary = result_subparsers.add_parser("summarize", help="Write result summary.")
+    result_summary.add_argument("--project", required=True, help="Project id or slug.")
+    result_summary.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+
+    table_parser = subparsers.add_parser("table", help="Create project tables.")
+    table_subparsers = table_parser.add_subparsers(dest="table_command")
+    table_create = table_subparsers.add_parser("create", help="Create a table.")
+    table_create.add_argument("--project", required=True, help="Project id or slug.")
+    table_create.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    table_create.add_argument(
+        "--from-runs",
+        action="store_true",
+        help="Create the table from explicit run records.",
+    )
+
+    figure_parser = subparsers.add_parser("figure", help="Create project figure records.")
+    figure_subparsers = figure_parser.add_subparsers(dest="figure_command")
+    figure_create = figure_subparsers.add_parser("create", help="Create a figure record.")
+    figure_create.add_argument("--project", required=True, help="Project id or slug.")
+    figure_create.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    figure_create.add_argument("--title", required=True, help="Figure title.")
+
+    claim_parser = subparsers.add_parser("claim", help="Check claim evidence.")
+    claim_subparsers = claim_parser.add_subparsers(dest="claim_command")
+    claim_list = claim_subparsers.add_parser("list", help="List project claims.")
+    claim_list.add_argument("--project", required=True, help="Project id or slug.")
+    claim_list.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    claim_check = claim_subparsers.add_parser("check", help="Check project or draft claims.")
+    claim_check.add_argument("--project", required=True, help="Project id or slug.")
+    claim_check.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    claim_check.add_argument("--draft", help="Optional Markdown or LaTeX draft path.")
+    claim_check.add_argument("--dry-run", action="store_true", help="Print report without writing.")
+
     draft_parser = subparsers.add_parser("draft", help="Plan evidence-gated drafts.")
     draft_subparsers = draft_parser.add_subparsers(dest="draft_command")
     draft_outline = draft_subparsers.add_parser("outline", help="Create a draft outline.")
@@ -338,6 +420,18 @@ def build_parser() -> argparse.ArgumentParser:
     agent_task_show.add_argument("task_id", help="Agent task id.")
     agent_task_show.add_argument("--project", required=True, help="Project id or slug.")
     agent_task_show.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+
+    agent_run = agent_subparsers.add_parser("run", help="Run an agent task through a safe backend.")
+    agent_run.add_argument("task_id", help="Agent task id.")
+    agent_run.add_argument("--project", required=True, help="Project id or slug.")
+    agent_run.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    agent_run.add_argument("--backend", required=True, choices=AGENT_RUN_BACKENDS)
+    agent_run.add_argument("--dry-run", action="store_true", help="Print actions without writing.")
+    agent_run.add_argument(
+        "--yes",
+        action="store_true",
+        help="Approve task-declared shell commands.",
+    )
 
     return parser
 
@@ -390,6 +484,18 @@ def run(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "experiment":
         return _run_experiment(args)
+
+    if args.command == "result":
+        return _run_result(args)
+
+    if args.command == "table":
+        return _run_table(args)
+
+    if args.command == "figure":
+        return _run_figure(args)
+
+    if args.command == "claim":
+        return _run_claim(args)
 
     if args.command == "draft":
         return _run_draft(args)
@@ -644,21 +750,112 @@ def _run_skill(args: argparse.Namespace) -> int:
 
 
 def _run_model(args: argparse.Namespace) -> int:
-    if args.model_command != "check":
-        return _error("model requires a subcommand: check", code=2)
-    provider = OpenAICompatibleProvider(
-        ModelProviderConfig(id="openai-compatible", provider="openai-compatible")
-    )
-    status = provider.status()
-    print(f"Provider: {status['provider']}")
-    print(f"Configured: {status['configured']}")
-    print(f"API key: {status['api_key']}")
-    print(f"Base URL: {status['base_url']}")
-    print(f"Model: {status['model']}")
-    return 0
+    if args.model_command == "check":
+        provider = OpenAICompatibleProvider(
+            ModelProviderConfig(id="openai-compatible", provider="openai-compatible")
+        )
+        status = provider.status()
+        print(f"Provider: {status['provider']}")
+        print(f"Configured: {status['configured']}")
+        print(f"API key: {status['api_key']}")
+        print(f"Base URL: {status['base_url']}")
+        print(f"Model: {status['model']}")
+        return 0
+
+    if args.model_command == "list":
+        try:
+            data = ModelRegistry(args.workspace).list()
+        except ModelRegistryError as exc:
+            return _error(str(exc), code=2)
+        defaults = data["defaults"]
+        print("Defaults:")
+        if defaults:
+            for task, provider in sorted(defaults.items()):
+                print(f"- {task}: {provider}")
+        else:
+            print("- none")
+        print("Providers:")
+        for provider in data["providers"]:
+            print(
+                f"- {provider['id']}\t{provider['provider']}\t"
+                f"enabled={provider['enabled']}\tmodel={provider['model'] or '(not set)'}"
+            )
+        return 0
+
+    if args.model_command == "set-default":
+        try:
+            ModelRegistry(args.workspace).set_default(
+                task=args.task,
+                provider_id=args.provider,
+                model=args.model,
+            )
+        except ModelRegistryError as exc:
+            return _error(str(exc), code=2)
+        print(f"Set {args.task} default: {args.provider} / {args.model}")
+        return 0
+
+    if args.model_command == "test":
+        try:
+            status = ModelRegistry(args.workspace).test(task=args.task)
+        except ModelRegistryError as exc:
+            return _error(str(exc), code=2)
+        print(yaml.safe_dump(status, sort_keys=False).strip())
+        return 0 if status.get("configured") else 2
+
+    return _error("model requires a subcommand: check, list, set-default, or test", code=2)
 
 
 def _run_paper(args: argparse.Namespace) -> int:
+    if args.paper_command == "init":
+        try:
+            tex_path, metadata_path = SubmissionService(args.workspace).init(
+                args.project, venue=args.venue
+            )
+        except WorkflowError as exc:
+            return _error(str(exc), code=2)
+        print(f"Initialized Paper: {tex_path}")
+        print(f"Metadata: {metadata_path}")
+        return 0
+
+    if args.paper_command == "build":
+        try:
+            code, log_path = SubmissionService(args.workspace).build(args.project, venue=args.venue)
+        except WorkflowError as exc:
+            return _error(str(exc), code=2)
+        print(f"Build log: {log_path}")
+        return code
+
+    if args.paper_command == "check":
+        try:
+            warnings, report_path = SubmissionService(args.workspace).check(
+                args.project, venue=args.venue
+            )
+        except WorkflowError as exc:
+            return _error(str(exc), code=2)
+        print(f"Paper Check: {report_path}")
+        if warnings:
+            print("Warnings:")
+            for warning in warnings:
+                print(f"- {warning}")
+        else:
+            print("No blocking warnings detected.")
+        return 0
+
+    if args.paper_command == "package":
+        try:
+            package_dir, zip_path = SubmissionService(args.workspace).package(
+                args.project,
+                venue=args.venue,
+                anonymous=args.anonymous,
+                camera_ready=args.camera_ready,
+                arxiv=args.arxiv,
+            )
+        except WorkflowError as exc:
+            return _error(str(exc), code=2)
+        print(f"Package: {package_dir}")
+        print(f"Archive: {zip_path}")
+        return 0
+
     if args.paper_command == "read":
         service = ReadingService(args.workspace)
         if args.dry_run:
@@ -699,7 +896,10 @@ def _run_paper(args: argparse.Namespace) -> int:
         print(f"Metadata: {yaml_path}")
         return 0
 
-    return _error("paper requires a subcommand: create-card or read", code=2)
+    return _error(
+        "paper requires a subcommand: create-card, read, init, build, check, or package",
+        code=2,
+    )
 
 
 def _run_idea(args: argparse.Namespace) -> int:
@@ -833,6 +1033,104 @@ def _run_experiment(args: argparse.Namespace) -> int:
     return _error("experiment requires a subcommand: plan, list, or add-run", code=2)
 
 
+def _run_result(args: argparse.Namespace) -> int:
+    service = ResultRegistry(args.workspace)
+    if args.result_command == "list":
+        try:
+            bundle = service.list(args.project)
+        except WorkflowError as exc:
+            return _error(str(exc), code=2)
+        if not bundle.metrics:
+            print("No run-grounded metrics.")
+        for metric in bundle.metrics:
+            print(f"{metric.run_id}\t{metric.experiment_id}\t{metric.name}\t{metric.value}")
+        return 0
+
+    if args.result_command == "summarize":
+        try:
+            bundle, path = service.summarize(args.project)
+        except WorkflowError as exc:
+            return _error(str(exc), code=2)
+        print(f"Result Summary: {path}")
+        print(f"Metrics: {len(bundle.metrics)}")
+        if bundle.warnings:
+            print("Warnings:")
+            for warning in bundle.warnings:
+                print(f"- {warning}")
+        return 0
+
+    return _error("result requires a subcommand: list or summarize", code=2)
+
+
+def _run_table(args: argparse.Namespace) -> int:
+    if args.table_command != "create":
+        return _error("table requires a subcommand: create", code=2)
+    if not args.from_runs:
+        return _error("table create currently requires --from-runs", code=2)
+    try:
+        table, yaml_path, markdown_path = ResultRegistry(args.workspace).create_table_from_runs(
+            args.project
+        )
+    except WorkflowError as exc:
+        return _error(str(exc), code=2)
+    print(f"Created Table: {table.id}")
+    print(f"Registry: {yaml_path}")
+    print(f"Markdown: {markdown_path}")
+    if table.warnings:
+        print("Warnings:")
+        for warning in table.warnings:
+            print(f"- {warning}")
+    return 0
+
+
+def _run_figure(args: argparse.Namespace) -> int:
+    if args.figure_command != "create":
+        return _error("figure requires a subcommand: create", code=2)
+    try:
+        figure, yaml_path, markdown_path = ResultRegistry(args.workspace).create_figure(
+            args.project, title=args.title
+        )
+    except WorkflowError as exc:
+        return _error(str(exc), code=2)
+    print(f"Created Figure: {figure.id}")
+    print(f"Registry: {yaml_path}")
+    print(f"Markdown: {markdown_path}")
+    if figure.warnings:
+        print("Warnings:")
+        for warning in figure.warnings:
+            print(f"- {warning}")
+    return 0
+
+
+def _run_claim(args: argparse.Namespace) -> int:
+    service = ClaimService(args.workspace)
+    if args.claim_command == "list":
+        try:
+            claims = service.list(args.project)
+        except WorkflowError as exc:
+            return _error(str(exc), code=2)
+        if not claims:
+            print("No claims.")
+            return 0
+        for claim in claims:
+            print(claim)
+        return 0
+
+    if args.claim_command == "check":
+        try:
+            result = service.check(args.project, draft=args.draft, dry_run=args.dry_run)
+        except WorkflowError as exc:
+            return _error(str(exc), code=2)
+        print(result.report)
+        if result.report_path:
+            print(f"\nReport: {result.report_path}")
+        if result.evidence_path:
+            print(f"Evidence: {result.evidence_path}")
+        return 0
+
+    return _error("claim requires a subcommand: list or check", code=2)
+
+
 def _run_draft(args: argparse.Namespace) -> int:
     service = DraftService(args.workspace)
     if args.draft_command == "outline":
@@ -861,9 +1159,26 @@ def _run_draft(args: argparse.Namespace) -> int:
 
 
 def _run_agent(args: argparse.Namespace) -> int:
-    if args.agent_command != "task":
-        return _error("agent requires a subcommand: task", code=2)
     service = AgentTaskService(args.workspace)
+    if args.agent_command == "run":
+        try:
+            result, path = service.run(
+                project_id=args.project,
+                task_id=args.task_id,
+                backend=args.backend,
+                dry_run=args.dry_run,
+                yes=args.yes,
+            )
+        except WorkflowError as exc:
+            return _error(str(exc), code=2)
+        print(yaml.safe_dump(result, sort_keys=False).strip())
+        if path:
+            print(f"Result: {path}")
+        return 0 if result.get("status") not in {"blocked", "missing_backend", "failed"} else 2
+
+    if args.agent_command != "task":
+        return _error("agent requires a subcommand: task or run", code=2)
+
     if args.agent_task_command == "create":
         try:
             task, path = service.create(

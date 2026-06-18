@@ -1,0 +1,9 @@
+task_id: task-writing-0001
+backend: manual
+status: manual_instructions
+instructions: Review the claim report and keep smoke-check language separate from scientific claims.
+stdout: ''
+stderr: ''
+returncode: 0
+dry_run: false
+created_at: '2026-06-19T00:00:00+00:00'

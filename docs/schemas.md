@@ -21,6 +21,10 @@ The core schemas live in `researchinfra.schemas` and use Pydantic v2.
 - `ExperimentPlan`
 - `Experiment`
 - `ResultRecord`
+- `MetricRecord`
+- `TableRecord`
+- `FigureRecord`
+- `ResultBundle`
 - `ClaimEvidenceLink`
 - `Run`
 - `Draft`
@@ -82,14 +86,20 @@ schema guidance, warnings, and legacy source fields.
 motivation, linked papers/readings/ideas, claims, open questions, decisions,
 risks, next actions, target venue, and status.
 
-`Baseline`, `Ablation`, `ExperimentPlan`, `ResultRecord`, and
-`ClaimEvidenceLink` support the file-first experiment workflow. These schemas
-record proposed comparisons, missing evidence, user-provided run metrics, and
-claim-to-evidence status without fabricating results.
+`Baseline`, `Ablation`, `ExperimentPlan`, `ResultRecord`, `MetricRecord`,
+`TableRecord`, `FigureRecord`, `ResultBundle`, and `ClaimEvidenceLink` support
+the file-first experiment workflow. These schemas record proposed comparisons,
+missing evidence, user-provided run metrics, table cell evidence, figure inputs,
+and claim-to-evidence status without fabricating results.
 
 `AgentTask` records include task type, project id, context files, expected
-outputs, constraints, verification commands, and suggested backend. Task
-creation records intent; it does not execute an agent backend.
+outputs, constraints, `safe_commands`, verification commands, and suggested
+backend. Shell execution can use only commands already present in
+`safe_commands` and still requires explicit approval.
+
+`WorkspaceConfig` includes model provider placeholders and a `model_defaults`
+map for task-specific defaults such as `reading`, `writing`, `reasoning`, and
+`cheap`. Credentials should not be stored in config files.
 
 ## Compatibility
 

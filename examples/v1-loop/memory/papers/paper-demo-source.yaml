@@ -1,0 +1,11 @@
+id: paper-demo-source
+title: Demo Source Note
+authors: []
+year: null
+venue: local-note
+path: memory/papers/paper-demo-source.md
+tags:
+- demo
+summary: Local demo card; not an external citation.
+notes: Created to demonstrate source-to-card flow without fabricating a paper.
+
