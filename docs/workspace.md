@@ -12,6 +12,7 @@ sources/               Papers, BibTeX, PDFs, and external references
 memory/                Claims, ideas, reviews, and durable notes
 memory/documents/      Extracted document text and metadata
 memory/papers/         Generated Paper Cards and metadata
+memory/readings/       Saved paper reading notes and prompt-only artifacts
 projects/              Scoped research efforts
 experiments/           Experiment plans and baseline definitions
 runs/                  Concrete execution records
@@ -31,5 +32,6 @@ configuration. Credentials should not be stored in workspace files.
 Feed registry records are stored in `.researchinfra/feeds.yaml`; discovered
 inbox items are stored in `.researchinfra/inbox.yaml`; promoted source records
 are stored in `.researchinfra/sources.yaml`. Generated Paper Cards live under
-`memory/papers/`; generated Idea Cards live under `memory/ideas/`. Extracted
-document text and metadata live under `memory/documents/<document-id>/`.
+`memory/papers/`; generated Idea Cards live under `memory/ideas/`; paper
+reading notes live under `memory/readings/<reading-id>/`. Extracted document
+text and metadata live under `memory/documents/<document-id>/`.

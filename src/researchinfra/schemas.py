@@ -321,7 +321,15 @@ class Skill(ResearchInfraModel):
     """A reusable research workflow prompt with metadata."""
 
     name: str = Field(..., min_length=1)
+    category: str = "general"
     description: str = Field(..., min_length=1)
+    input_type: str = "text"
+    output_type: str = "markdown"
+    required_context: list[str] = Field(default_factory=list)
+    recommended_model: str = "optional"
+    version: str = "0.1"
+    author: str | None = None
+    tags: list[str] = Field(default_factory=list)
     inputs: list[str] = Field(default_factory=list)
     outputs: list[str] = Field(default_factory=list)
     recommended_model_tier: str = "optional"

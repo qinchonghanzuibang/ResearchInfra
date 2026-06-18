@@ -5,10 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 from string import Template
 from textwrap import dedent
+from typing import Any
 
 import yaml
 
-from researchinfra.schemas import Skill, Source
+from researchinfra.documents import DocumentStore, evidence_prompt_context
+from researchinfra.schemas import Document, Skill, Source
 from researchinfra.sources import SourceNotFoundError, SourceRegistry
 
 
@@ -20,10 +22,36 @@ class SkillNotFoundError(SkillError):
     """Raised when a skill cannot be found."""
 
 
+READING_MODES: tuple[str, ...] = (
+    "skim",
+    "deep",
+    "idea",
+    "reviewer",
+    "reproduce",
+    "related_work",
+)
+
+
 BUILTIN_SKILLS: dict[str, Skill] = {
     "paper_card": Skill(
         name="paper_card",
-        description="Create an evidence-aware Paper Card from source metadata or notes.",
+        category="writing",
+        description=(
+            "Create an evidence-aware Paper Card from source metadata and optional content."
+        ),
+        input_type="source",
+        output_type="paper_card_markdown",
+        required_context=[
+            "source",
+            "metadata",
+            "chunks",
+            "evidence_instructions",
+            "warnings",
+        ],
+        recommended_model="standard",
+        version="0.2",
+        author="ResearchInfra",
+        tags=["paper", "evidence"],
         inputs=["source"],
         outputs=["paper_card_markdown", "paper_metadata_yaml"],
         recommended_model_tier="standard",
@@ -31,35 +59,49 @@ BUILTIN_SKILLS: dict[str, Skill] = {
             """
             You are helping create a ResearchInfra Paper Card.
 
-            Source metadata:
-            - source_id: $source_id
-            - type: $source_type
-            - title: $title
-            - target: $target
-            - tags: $tags
-            - domain: $domain
+            Profile:
+            $profile
 
-            Available extracted text or notes:
-            $input_text
+            Source:
+            $source
 
-            Write a structured Paper Card in Markdown with these sections:
-            - Metadata
-            - What is known from the provided metadata
-            - Evidence available
-            - Missing evidence and uncertainty
-            - Claims not yet supported
-            - Follow-up reading questions
+            Metadata:
+            $metadata
+
+            Document:
+            $document
+
+            Chunks:
+            $chunks
+
+            Evidence instructions:
+            $evidence_instructions
+
+            Warnings:
+            $warnings
+
+            Output schema:
+            $output_schema
 
             Important constraints:
             - Do not fabricate paper content, citations, experiments, datasets, metrics, or results.
-            - If only metadata is available, explicitly warn that the card is metadata-limited.
+            - Cite explicit evidence spans using document_id and chunk_id when chunks are present.
+            - If content is missing or partial, include that limitation.
             - Keep claims separate from hypotheses.
             """
         ).strip(),
     ),
     "idea_card": Skill(
         name="idea_card",
+        category="ideation",
         description="Generate a cautious Idea Card from a Paper Card or source context.",
+        input_type="paper_card",
+        output_type="idea_card_markdown",
+        required_context=["metadata", "warnings"],
+        recommended_model="standard",
+        version="0.1",
+        author="ResearchInfra",
+        tags=["idea", "hypothesis"],
         inputs=["paper_card"],
         outputs=["idea_card_markdown", "idea_metadata_yaml"],
         recommended_model_tier="standard",
@@ -70,14 +112,8 @@ BUILTIN_SKILLS: dict[str, Skill] = {
             Input context:
             $input_text
 
-            Write a structured Idea Card in Markdown with these sections:
-            - Motivation
-            - Research question
-            - Hypothesis
-            - Evidence needed
-            - Possible experiments
-            - Risks and uncertainty
-            - Human review checklist
+            Output schema:
+            $output_schema
 
             Important constraints:
             - Do not invent results, citations, or experiments as completed work.
@@ -88,7 +124,15 @@ BUILTIN_SKILLS: dict[str, Skill] = {
     ),
     "claim_check": Skill(
         name="claim_check",
+        category="reviewing",
         description="Check whether a claim is supported by available workspace evidence.",
+        input_type="claim_or_note",
+        output_type="claim_review",
+        required_context=["metadata", "chunks", "evidence_instructions"],
+        recommended_model="standard",
+        version="0.1",
+        author="ResearchInfra",
+        tags=["claim", "review"],
         inputs=["claim_or_note"],
         outputs=["claim_review"],
         recommended_model_tier="standard",
@@ -97,6 +141,9 @@ BUILTIN_SKILLS: dict[str, Skill] = {
             Review the following claim or note against available context:
 
             $input_text
+
+            Evidence context:
+            $chunks
 
             Return:
             - Claim being checked
@@ -111,7 +158,15 @@ BUILTIN_SKILLS: dict[str, Skill] = {
     ),
     "experiment_plan": Skill(
         name="experiment_plan",
+        category="experiment-planning",
         description="Draft an experiment plan from a research idea or claim.",
+        input_type="idea_or_claim",
+        output_type="experiment_plan",
+        required_context=["metadata", "warnings"],
+        recommended_model="standard",
+        version="0.1",
+        author="ResearchInfra",
+        tags=["experiment", "planning"],
         inputs=["idea_or_claim"],
         outputs=["experiment_plan"],
         recommended_model_tier="standard",
@@ -137,20 +192,150 @@ BUILTIN_SKILLS: dict[str, Skill] = {
 }
 
 
+def _reading_skill(
+    *,
+    name: str,
+    description: str,
+    output_schema: str,
+    focus: str,
+) -> Skill:
+    return Skill(
+        name=name,
+        category="reading",
+        description=description,
+        input_type="source_or_document",
+        output_type="reading_notes_markdown",
+        required_context=[
+            "source",
+            "document",
+            "metadata",
+            "chunks",
+            "evidence_instructions",
+            "warnings",
+        ],
+        recommended_model="standard",
+        version="0.1",
+        author="ResearchInfra",
+        tags=["reading", name.removeprefix("read_")],
+        inputs=["source_or_document"],
+        outputs=["reading_notes_markdown"],
+        recommended_model_tier="standard",
+        prompt_template=dedent(
+            f"""
+            You are reading a research paper with the `{name.removeprefix("read_")}` mode.
+
+            Profile:
+            $profile
+
+            Source:
+            $source
+
+            Document:
+            $document
+
+            Metadata:
+            $metadata
+
+            Chunks:
+            $chunks
+
+            Evidence instructions:
+            $evidence_instructions
+
+            Warnings:
+            $warnings
+
+            Reading focus:
+            {focus}
+
+            Output schema:
+            {output_schema}
+
+            Constraints:
+            - Do not fabricate paper content, citations, experiments, datasets, metrics, or results.
+            - Cite document chunks when making paper-specific observations.
+            - If content is missing or partial, say so explicitly.
+            - Separate evidence-backed observations from hypotheses or ideas.
+            """
+        ).strip(),
+    )
+
+
+BUILTIN_SKILLS.update(
+    {
+        "read_skim": _reading_skill(
+            name="read_skim",
+            description="Quick triage and whether to read a paper deeply.",
+            focus="Decide whether this source deserves deeper reading and why.",
+            output_schema=(
+                "- Triage decision\n- Why it matters\n- Key evidence spans\n"
+                "- Missing context\n- Next action"
+            ),
+        ),
+        "read_deep": _reading_skill(
+            name="read_deep",
+            description="Structured section-level understanding.",
+            focus="Build a careful section-level understanding grounded in extracted chunks.",
+            output_schema=(
+                "- Problem\n- Method\n- Evidence\n- Assumptions\n- Limitations\n- Questions"
+            ),
+        ),
+        "read_idea": _reading_skill(
+            name="read_idea",
+            description="Limitations, gaps, and possible research ideas.",
+            focus="Identify limitations and research gaps without presenting ideas as evidence.",
+            output_schema=(
+                "- Gaps\n- Possible ideas\n- Evidence needed\n- Risks\n- Human review checklist"
+            ),
+        ),
+        "read_reviewer": _reading_skill(
+            name="read_reviewer",
+            description="Novelty, weakness, missing experiments, and overclaims.",
+            focus="Read like a critical reviewer while avoiding unsupported accusations.",
+            output_schema=(
+                "- Summary\n- Strengths\n- Weaknesses\n- Missing experiments\n"
+                "- Overclaims\n- Questions"
+            ),
+        ),
+        "read_reproduce": _reading_skill(
+            name="read_reproduce",
+            description="Datasets, models, training, evaluation, and implementation risks.",
+            focus="Extract reproducibility-relevant details and what is missing.",
+            output_schema=(
+                "- Artifacts needed\n- Datasets\n- Models\n- Training\n- Evaluation\n- Risks"
+            ),
+        ),
+        "read_related_work": _reading_skill(
+            name="read_related_work",
+            description="Concise related-work summary with citation-ready notes.",
+            focus="Summarize how this work relates to a research area with citation-ready notes.",
+            output_schema=(
+                "- Citation-ready summary\n- Contribution\n- Compared work\n"
+                "- Useful quote spans\n- Caveats"
+            ),
+        ),
+    }
+)
+
+
 class SkillRunner:
     """Load skills and render prompts from workspace inputs."""
 
     def __init__(self, workspace: str | Path) -> None:
         self.workspace = Path(workspace).expanduser().resolve()
         self.registry = SourceRegistry(self.workspace)
+        self.documents = DocumentStore(self.workspace)
 
-    def list(self) -> list[Skill]:
+    def list(self, *, category: str | None = None) -> list[Skill]:
         """Return built-in and workspace skills."""
 
         skills = {name: skill for name, skill in BUILTIN_SKILLS.items()}
         for skill in self._workspace_skills():
             skills[skill.name] = skill
-        return sorted(skills.values(), key=lambda skill: skill.name)
+        values = sorted(skills.values(), key=lambda skill: (skill.category, skill.name))
+        if category is not None:
+            values = [skill for skill in values if skill.category == category]
+        return values
 
     def get(self, name: str) -> Skill:
         """Return a skill by name."""
@@ -160,12 +345,194 @@ class SkillRunner:
                 return skill
         raise SkillNotFoundError(f"Skill not found: {name}")
 
-    def render(self, name: str, input_value: str) -> str:
-        """Render a skill prompt for a file path or source id."""
+    def create(self, name: str, *, category: str) -> tuple[Path, Path]:
+        """Create a workspace skill skeleton."""
+
+        category_dir = self.workspace / "skills" / category
+        category_dir.mkdir(parents=True, exist_ok=True)
+        yaml_path = category_dir / f"{name}.yaml"
+        prompt_path = category_dir / f"{name}.md"
+        if yaml_path.exists() or prompt_path.exists():
+            raise SkillError(f"Skill already exists: {name}")
+        prompt_template = dedent(
+            """
+            # $profile
+
+            Source:
+            $source
+
+            Document:
+            $document
+
+            Metadata:
+            $metadata
+
+            Chunks:
+            $chunks
+
+            Evidence instructions:
+            $evidence_instructions
+
+            Warnings:
+            $warnings
+
+            Output schema:
+            $output_schema
+            """
+        ).strip()
+        yaml_path.write_text(
+            yaml.safe_dump(
+                {
+                    "name": name,
+                    "category": category,
+                    "description": "Describe what this skill should do.",
+                    "input_type": "source_or_document",
+                    "output_type": "markdown",
+                    "required_context": ["source", "document", "chunks", "warnings"],
+                    "prompt_template": f"{name}.md",
+                    "recommended_model": "optional",
+                    "version": "0.1",
+                    "author": None,
+                    "tags": [],
+                },
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+        prompt_path.write_text(prompt_template + "\n", encoding="utf-8")
+        return yaml_path, prompt_path
+
+    def render(
+        self,
+        name: str,
+        input_value: str,
+        *,
+        profile: str = "ResearchInfra cautious research assistant",
+        output_schema: str | None = None,
+        include_document: bool = True,
+    ) -> str:
+        """Render a skill prompt for a file path, source id, or document id."""
 
         skill = self.get(name)
-        context = self._input_context(input_value)
+        context = self.context_for_input(
+            input_value,
+            profile=profile,
+            output_schema=output_schema or _default_output_schema(skill),
+            include_document=include_document,
+        )
         return Template(skill.prompt_template).safe_substitute(context)
+
+    def context_for_input(
+        self,
+        input_value: str,
+        *,
+        profile: str = "ResearchInfra cautious research assistant",
+        output_schema: str = "Markdown notes with explicit evidence references.",
+        include_document: bool = True,
+    ) -> dict[str, str]:
+        """Build prompt variables for a file path, source id, or document id."""
+
+        if include_document:
+            try:
+                document = self.documents.get(input_value)
+            except Exception:
+                document = None
+            if document is not None:
+                source = _try_get_source(self.registry, document.source_id)
+                return self._context(
+                    source=source,
+                    document=document,
+                    input_value=input_value,
+                    profile=profile,
+                    output_schema=output_schema,
+                )
+
+        try:
+            source = self.registry.get(input_value)
+        except SourceNotFoundError:
+            return self._file_context(input_value, profile=profile, output_schema=output_schema)
+        document = self.documents.find_by_source_id(source.id) if include_document else None
+        return self._context(
+            source=source,
+            document=document,
+            input_value=input_value,
+            profile=profile,
+            output_schema=output_schema,
+        )
+
+    def _context(
+        self,
+        *,
+        source: Source | None,
+        document: Document | None,
+        input_value: str,
+        profile: str,
+        output_schema: str,
+    ) -> dict[str, str]:
+        warnings: list[str] = []
+        if document is None:
+            warnings.append("No extracted document content is available for this input.")
+        elif document.warnings:
+            warnings.extend(document.warnings)
+
+        metadata = _metadata_text(source, document)
+        chunks = (
+            evidence_prompt_context(document) if document is not None else "(no chunks available)"
+        )
+        source_text = _source_text(source) if source is not None else f"Input: {input_value}"
+        document_text = _document_text(document) if document is not None else "(no document)"
+        input_text = chunks if document is not None else source_text
+        return {
+            "profile": profile,
+            "source": source_text,
+            "document": document_text,
+            "metadata": metadata,
+            "chunks": chunks,
+            "evidence_instructions": _evidence_instructions(document),
+            "output_schema": output_schema,
+            "warnings": "\n".join(f"- {warning}" for warning in warnings) or "(none)",
+            "input_text": input_text,
+            "source_id": source.id if source else "",
+            "source_type": source.source_type if source else "file",
+            "title": (
+                (source.title if source else None)
+                or (document.title if document else None)
+                or "(untitled)"
+            ),
+            "target": source.target if source else input_value,
+            "tags": ", ".join(source.tags) if source and source.tags else "(none)",
+            "domain": source.url.domain if source and source.url else "(not applicable)",
+        }
+
+    def _file_context(
+        self, input_value: str, *, profile: str, output_schema: str
+    ) -> dict[str, str]:
+        path = Path(input_value).expanduser()
+        if not path.is_absolute():
+            path = (Path.cwd() / path).resolve()
+        if path.exists() and path.is_file() and path.suffix.lower() in {".md", ".txt"}:
+            text = path.read_text(encoding="utf-8")[:12000]
+        elif path.exists():
+            text = f"[File exists but was not parsed: {path}]"
+        else:
+            text = f"[No file, source, or document found for input: {input_value}]"
+        return {
+            "profile": profile,
+            "source": f"File input: {path}",
+            "document": "(no document)",
+            "metadata": f"path: {path}",
+            "chunks": text,
+            "evidence_instructions": "Cite only excerpts present in the input.",
+            "output_schema": output_schema,
+            "warnings": "(none)" if path.exists() else "- Input was not found.",
+            "input_text": text,
+            "source_id": "",
+            "source_type": "file",
+            "title": path.name,
+            "target": str(path),
+            "tags": "(none)",
+            "domain": "(not applicable)",
+        }
 
     def _workspace_skills(self) -> list[Skill]:
         skills_dir = self.workspace / "skills"
@@ -173,89 +540,133 @@ class SkillRunner:
             return []
 
         skills: list[Skill] = []
-        for path in sorted(skills_dir.glob("*/skill.yaml")):
-            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-            if not isinstance(data, dict):
+        paths = sorted(skills_dir.glob("*/*.yaml")) + sorted(skills_dir.glob("*/skill.yaml"))
+        seen_paths: set[Path] = set()
+        for path in paths:
+            if path in seen_paths:
                 continue
-            prompt_path = path.parent / str(data.get("prompt", "prompt.md"))
-            prompt_template = (
-                prompt_path.read_text(encoding="utf-8")
-                if prompt_path.exists()
-                else str(data.get("prompt_template", ""))
-            )
-            if not prompt_template.strip():
-                continue
-            skills.append(
-                Skill(
-                    name=str(data.get("name", path.parent.name)),
-                    description=str(data.get("description", "Workspace skill.")),
-                    inputs=list(data.get("inputs", [])),
-                    outputs=list(data.get("outputs", [])),
-                    recommended_model_tier=str(data.get("recommended_model_tier", "optional")),
-                    prompt_template=prompt_template,
-                    origin="workspace",
-                )
-            )
+            seen_paths.add(path)
+            skill = _load_skill_file(path, skills_dir)
+            if skill is not None:
+                skills.append(skill)
         return skills
 
-    def _input_context(self, input_value: str) -> dict[str, str]:
-        try:
-            source = self.registry.get(input_value)
-        except SourceNotFoundError:
-            return self._file_context(input_value)
-        return self._source_context(source)
 
-    def _source_context(self, source: Source) -> dict[str, str]:
-        domain = source.url.domain if source.url is not None else ""
-        return {
-            "source_id": source.id,
-            "source_type": source.source_type,
-            "title": source.title or "(untitled)",
-            "target": source.target,
-            "tags": ", ".join(source.tags) if source.tags else "(none)",
-            "domain": domain or "(not applicable)",
-            "input_text": _metadata_limited_text(source),
-        }
-
-    def _file_context(self, input_value: str) -> dict[str, str]:
-        path = Path(input_value).expanduser()
-        if not path.is_absolute():
-            path = (Path.cwd() / path).resolve()
-        text = ""
-        if path.exists() and path.is_file() and path.suffix.lower() in {".md", ".txt"}:
-            text = path.read_text(encoding="utf-8")[:12000]
-        elif path.exists():
-            text = f"[File exists but was not parsed: {path}]"
-        else:
-            text = f"[No file or source found for input: {input_value}]"
-        return {
-            "source_id": "",
-            "source_type": "file",
-            "title": path.name,
-            "target": str(path),
-            "tags": "(none)",
-            "domain": "(not applicable)",
-            "input_text": text,
-        }
+def _load_skill_file(path: Path, skills_dir: Path) -> Skill | None:
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(data, dict):
+        return None
+    category = str(data.get("category") or path.parent.name)
+    name = str(data.get("name") or (path.parent.name if path.name == "skill.yaml" else path.stem))
+    prompt_value = str(data.get("prompt_template") or data.get("prompt") or "prompt.md")
+    prompt_path = path.parent / prompt_value
+    prompt_template = (
+        prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else prompt_value
+    )
+    if not prompt_template.strip():
+        return None
+    return Skill(
+        name=name,
+        category=category,
+        description=str(data.get("description", "Workspace skill.")),
+        input_type=str(data.get("input_type", "text")),
+        output_type=str(data.get("output_type", "markdown")),
+        required_context=list(data.get("required_context", [])),
+        recommended_model=str(
+            data.get("recommended_model", data.get("recommended_model_tier", "optional"))
+        ),
+        version=str(data.get("version", "0.1")),
+        author=data.get("author"),
+        tags=list(data.get("tags", [])),
+        inputs=list(data.get("inputs", [])),
+        outputs=list(data.get("outputs", [])),
+        recommended_model_tier=str(
+            data.get("recommended_model_tier", data.get("recommended_model", "optional"))
+        ),
+        prompt_template=prompt_template,
+        origin="workspace" if path.is_relative_to(skills_dir) else "built-in",
+    )
 
 
-def _metadata_limited_text(source: Source) -> str:
-    lines = [
-        "WARNING: This context is based only on source metadata unless separate notes were added.",
-        f"Source id: {source.id}",
-        f"Title: {source.title or '(untitled)'}",
-        f"Type: {source.source_type}",
-        f"Target: {source.target}",
-    ]
-    if source.local is not None:
-        size = source.local.size_bytes if source.local.size_bytes is not None else "(unknown)"
-        lines.extend(
-            [
-                f"Filename: {source.local.filename}",
-                f"Extension: {source.local.extension or '(none)'}",
-                f"Size bytes: {size}",
-            ]
+def _try_get_source(registry: SourceRegistry, source_id: str) -> Source | None:
+    try:
+        return registry.get(source_id)
+    except SourceNotFoundError:
+        return None
+
+
+def _metadata_text(source: Source | None, document: Document | None) -> str:
+    data: dict[str, Any] = {}
+    if source is not None:
+        data.update(
+            {
+                "source_id": source.id,
+                "source_type": source.source_type,
+                "title": source.title,
+                "target": source.target,
+                "authors": source.authors,
+                "published_at": source.published_at.isoformat() if source.published_at else None,
+                "external_id": source.external_id,
+                "tags": source.tags,
+                "abstract": source.abstract,
+            }
         )
+    if document is not None:
+        data.update(
+            {
+                "document_id": document.id,
+                "content_type": document.content_type,
+                "extraction_status": document.extraction_status,
+                "text_path": document.text_path,
+                "warnings": document.warnings,
+            }
+        )
+    return yaml.safe_dump(data or {"input": "unknown"}, sort_keys=False).strip()
+
+
+def _source_text(source: Source | None) -> str:
+    if source is None:
+        return "(no source)"
+    lines = [
+        f"- source_id: {source.id}",
+        f"- type: {source.source_type}",
+        f"- title: {source.title or '(untitled)'}",
+        f"- target: {source.target}",
+        f"- tags: {', '.join(source.tags) if source.tags else '(none)'}",
+    ]
     if source.url is not None:
-        lines.append(f"Domain: {source.url.domain or '(unknown)'}")
+        lines.append(f"- domain: {source.url.domain or '(unknown)'}")
     return "\n".join(lines)
+
+
+def _document_text(document: Document | None) -> str:
+    if document is None:
+        return "(no document)"
+    return "\n".join(
+        [
+            f"- document_id: {document.id}",
+            f"- source_id: {document.source_id}",
+            f"- content_type: {document.content_type}",
+            f"- extraction_status: {document.extraction_status}",
+            f"- text_path: {document.text_path}",
+            f"- chunks: {len(document.chunks)}",
+        ]
+    )
+
+
+def _evidence_instructions(document: Document | None) -> str:
+    if document is None:
+        return "No extracted document is available. Do not fabricate evidence spans."
+    return (
+        "Use the provided chunks as evidence. Cite observations with document_id and chunk_id. "
+        "Do not claim unsupported results, experiments, datasets, or citations."
+    )
+
+
+def _default_output_schema(skill: Skill) -> str:
+    if skill.output_type == "paper_card_markdown":
+        return (
+            "- Metadata\n- Summary\n- Evidence\n- Limitations and missing evidence\n"
+            "- Claims not yet supported\n- Follow-up questions"
+        )
+    return f"Markdown output for {skill.output_type}."

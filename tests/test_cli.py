@@ -19,7 +19,10 @@ def test_cli_init_creates_workspace(tmp_path, capsys) -> None:  # type: ignore[n
     assert exit_code == 0
     assert "Initialized ResearchInfra workspace" in captured.out
     assert (workspace / ".researchinfra" / "workspace.yaml").exists()
+    assert (workspace / "memory" / "readings").exists()
     assert (workspace / "skills" / "reading" / "SKILL.md").exists()
+    assert (workspace / "skills" / "reading" / "read_skim.yaml").exists()
+    assert (workspace / "skills" / "writing" / "paper_card.yaml").exists()
     assert (workspace / "templates" / "venues" / "neurips" / "main.tex").exists()
 
 
@@ -53,10 +56,17 @@ def test_cli_source_and_skill_dry_run(tmp_path, capsys) -> None:  # type: ignore
     assert source_id in list_output
     assert "Demo Paper" in list_output
 
-    skill_code = run(["skill", "list", "--workspace", str(workspace)])
+    skill_code = run(["skill", "list", "--workspace", str(workspace), "--category", "writing"])
     skill_output = capsys.readouterr().out
     assert skill_code == 0
     assert "paper_card" in skill_output
+    assert "\twriting\t" in skill_output
+
+    show_code = run(["skill", "show", "paper_card", "--workspace", str(workspace)])
+    show_output = capsys.readouterr().out
+    assert show_code == 0
+    assert "prompt_template" in show_output
+    assert "required_context" in show_output
 
     dry_run_code = run(
         [
@@ -74,6 +84,30 @@ def test_cli_source_and_skill_dry_run(tmp_path, capsys) -> None:  # type: ignore
     assert dry_run_code == 0
     assert "Demo Paper" in dry_run_output
     assert "Do not fabricate" in dry_run_output
+
+
+def test_cli_skill_create_writes_category_skill(tmp_path, capsys) -> None:  # type: ignore[no-untyped-def]
+    workspace = tmp_path / "workspace"
+    assert run(["init", str(workspace)]) == 0
+    capsys.readouterr()
+
+    code = run(
+        [
+            "skill",
+            "create",
+            "read_methods",
+            "--workspace",
+            str(workspace),
+            "--category",
+            "reading",
+        ]
+    )
+    output = capsys.readouterr().out
+
+    assert code == 0
+    assert "Created skill: read_methods" in output
+    assert (workspace / "skills" / "reading" / "read_methods.yaml").exists()
+    assert (workspace / "skills" / "reading" / "read_methods.md").exists()
 
 
 def test_cli_skill_missing_api_key_is_clear(tmp_path, capsys, monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -249,7 +283,8 @@ def test_cli_feed_inbox_and_enrich_workflow(tmp_path, capsys) -> None:  # type: 
     assert "Skipped inbox item" in capsys.readouterr().out
 
 
-def test_cli_source_extract_document_and_paper_prompt(tmp_path, capsys) -> None:  # type: ignore[no-untyped-def]
+def test_cli_source_extract_document_and_paper_prompt(tmp_path, capsys, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     workspace = tmp_path / "workspace"
     assert run(["init", str(workspace)]) == 0
     capsys.readouterr()
@@ -315,3 +350,37 @@ def test_cli_source_extract_document_and_paper_prompt(tmp_path, capsys) -> None:
     assert "Extracted document evidence" in prompt
     assert "chunk-0001" in prompt
     assert "Do not infer claims" in prompt
+
+    assert (
+        run(
+            [
+                "paper",
+                "read",
+                source_id,
+                "--workspace",
+                str(workspace),
+                "--mode",
+                "deep",
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+    read_prompt = capsys.readouterr().out
+    assert "deep" in read_prompt
+    assert "This is extracted evidence" in read_prompt
+    assert "chunk-0001" in read_prompt
+
+    assert run(["paper", "read", source_id, "--workspace", str(workspace), "--mode", "skim"]) == 0
+    read_output = capsys.readouterr().out
+    reading_id = next(
+        line.split(": ", 1)[1]
+        for line in read_output.splitlines()
+        if line.startswith("Created Reading Notes")
+    )
+    assert (workspace / "memory" / "readings" / reading_id / "notes.md").exists()
+    assert (workspace / "memory" / "readings" / reading_id / "metadata.yaml").exists()
+    notes = (workspace / "memory" / "readings" / reading_id / "notes.md").read_text(
+        encoding="utf-8"
+    )
+    assert "No model provider was configured" in notes

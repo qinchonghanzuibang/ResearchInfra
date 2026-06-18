@@ -8,7 +8,7 @@ from textwrap import dedent
 
 import yaml
 
-from researchinfra.documents import DocumentStore, evidence_prompt_context
+from researchinfra.documents import DocumentStore
 from researchinfra.models.adapters import OpenAICompatibleProvider
 from researchinfra.models.base import ModelProviderRequestError
 from researchinfra.schemas import ModelProviderConfig, Source, utc_now
@@ -32,22 +32,11 @@ class PaperCardService:
     def render_prompt(self, source_id: str, *, use_content: bool = False) -> str:
         """Render the Paper Card prompt for a source."""
 
-        prompt = self.runner.render("paper_card", source_id)
-        if not use_content:
-            return prompt
-        document = self.documents.find_by_source_id(source_id)
-        if document is None:
-            return (
-                prompt
-                + "\n\n"
-                + "Extracted document evidence:\n"
-                + "- No extracted document found for this source. Run "
-                + "`researchinfra source extract <source-id> --workspace <workspace>` first.\n"
-                + "\nEvidence instructions:\n"
-                + "- State that no extracted content was available.\n"
-                + "- Do not fabricate evidence spans."
-            )
-        return prompt + "\n\n" + evidence_prompt_context(document)
+        return self.runner.render(
+            "paper_card",
+            source_id,
+            include_document=use_content,
+        )
 
     def create(self, source_id: str, *, use_content: bool = False) -> tuple[str, Path, Path]:
         """Create a Paper Card markdown file and YAML metadata."""

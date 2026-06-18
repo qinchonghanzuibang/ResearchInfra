@@ -27,8 +27,9 @@ from researchinfra.documents import (
 )
 from researchinfra.models.adapters import OpenAICompatibleProvider
 from researchinfra.models.base import ModelProviderConfigurationError, ModelProviderRequestError
+from researchinfra.readings import ReadingError, ReadingService
 from researchinfra.schemas import ModelProviderConfig
-from researchinfra.skills import SkillNotFoundError, SkillRunner
+from researchinfra.skills import READING_MODES, SkillError, SkillNotFoundError, SkillRunner
 from researchinfra.sources import SourceNotFoundError, SourceRegistry
 from researchinfra.workspace import WorkspaceExistsError, init_workspace
 
@@ -149,6 +150,20 @@ def build_parser() -> argparse.ArgumentParser:
     skill_subparsers = skill_parser.add_subparsers(dest="skill_command")
     skill_list = skill_subparsers.add_parser("list", help="List available skills.")
     skill_list.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    skill_list.add_argument("--category", help="Optional category filter, such as reading.")
+
+    skill_show = skill_subparsers.add_parser("show", help="Show skill metadata and prompt.")
+    skill_show.add_argument("skill_name", help="Skill name.")
+    skill_show.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+
+    skill_create = skill_subparsers.add_parser("create", help="Create a workspace skill.")
+    skill_create.add_argument("skill_name", help="Skill name.")
+    skill_create.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    skill_create.add_argument(
+        "--category",
+        default="general",
+        help="Skill category directory, such as reading, writing, or reviewing.",
+    )
 
     skill_run = skill_subparsers.add_parser("run", help="Run a skill against a file or source.")
     skill_run.add_argument("skill_name", help="Skill name.")
@@ -179,6 +194,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--use-content",
         action="store_true",
         help="Include extracted document chunks and evidence instructions.",
+    )
+    paper_read = paper_subparsers.add_parser("read", help="Read a paper with a built-in mode.")
+    paper_read.add_argument("source_id", help="Source id to read.")
+    paper_read.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    paper_read.add_argument(
+        "--mode",
+        choices=READING_MODES,
+        default="skim",
+        help="Reading mode.",
+    )
+    paper_read.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the rendered reading prompt instead of writing reading notes.",
     )
 
     idea_parser = subparsers.add_parser("idea", help="Generate research idea artifacts.")
@@ -431,8 +460,26 @@ def _run_inbox(args: argparse.Namespace) -> int:
 def _run_skill(args: argparse.Namespace) -> int:
     runner = SkillRunner(args.workspace)
     if args.skill_command == "list":
-        for skill in runner.list():
-            print(f"{skill.name}\t{skill.origin}\t{skill.description}")
+        for skill in runner.list(category=args.category):
+            print(f"{skill.name}\t{skill.category}\t{skill.origin}\t{skill.description}")
+        return 0
+
+    if args.skill_command == "show":
+        try:
+            skill = runner.get(args.skill_name)
+        except SkillNotFoundError as exc:
+            return _error(str(exc), code=2)
+        print(yaml.safe_dump(skill.model_dump(mode="json"), sort_keys=False).strip())
+        return 0
+
+    if args.skill_command == "create":
+        try:
+            yaml_path, prompt_path = runner.create(args.skill_name, category=args.category)
+        except SkillError as exc:
+            return _error(str(exc), code=2)
+        print(f"Created skill: {args.skill_name}")
+        print(f"Metadata: {yaml_path}")
+        print(f"Prompt: {prompt_path}")
         return 0
 
     if args.skill_command == "run":
@@ -463,7 +510,7 @@ def _run_skill(args: argparse.Namespace) -> int:
             print(output)
         return 0
 
-    return _error("skill requires a subcommand: list or run", code=2)
+    return _error("skill requires a subcommand: list, show, create, or run", code=2)
 
 
 def _run_model(args: argparse.Namespace) -> int:
@@ -482,29 +529,47 @@ def _run_model(args: argparse.Namespace) -> int:
 
 
 def _run_paper(args: argparse.Namespace) -> int:
-    if args.paper_command != "create-card":
-        return _error("paper requires a subcommand: create-card", code=2)
-    if args.dry_run:
+    if args.paper_command == "read":
+        service = ReadingService(args.workspace)
+        if args.dry_run:
+            try:
+                print(service.render_prompt(args.source_id, mode=args.mode))
+            except (ReadingError, SkillNotFoundError, SourceNotFoundError) as exc:
+                return _error(str(exc), code=2)
+            return 0
         try:
-            print(
-                PaperCardService(args.workspace).render_prompt(
-                    args.source_id, use_content=args.use_content
-                )
-            )
-        except (CardError, SkillNotFoundError, SourceNotFoundError) as exc:
+            reading_id, notes_path, metadata_path = service.read(args.source_id, mode=args.mode)
+        except (ReadingError, SkillNotFoundError, SourceNotFoundError) as exc:
             return _error(str(exc), code=2)
+        print(f"Created Reading Notes: {reading_id}")
+        print(f"Notes: {notes_path}")
+        print(f"Metadata: {metadata_path}")
         return 0
 
-    try:
-        paper_id, markdown_path, yaml_path = PaperCardService(args.workspace).create(
-            args.source_id, use_content=args.use_content
-        )
-    except (CardError, SourceNotFoundError) as exc:
-        return _error(str(exc), code=2)
-    print(f"Created Paper Card: {paper_id}")
-    print(f"Markdown: {markdown_path}")
-    print(f"Metadata: {yaml_path}")
-    return 0
+    if args.paper_command == "create-card":
+        if args.dry_run:
+            try:
+                print(
+                    PaperCardService(args.workspace).render_prompt(
+                        args.source_id, use_content=args.use_content
+                    )
+                )
+            except (CardError, SkillNotFoundError, SourceNotFoundError) as exc:
+                return _error(str(exc), code=2)
+            return 0
+
+        try:
+            paper_id, markdown_path, yaml_path = PaperCardService(args.workspace).create(
+                args.source_id, use_content=args.use_content
+            )
+        except (CardError, SourceNotFoundError) as exc:
+            return _error(str(exc), code=2)
+        print(f"Created Paper Card: {paper_id}")
+        print(f"Markdown: {markdown_path}")
+        print(f"Metadata: {yaml_path}")
+        return 0
+
+    return _error("paper requires a subcommand: create-card or read", code=2)
 
 
 def _run_idea(args: argparse.Namespace) -> int:

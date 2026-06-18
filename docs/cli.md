@@ -138,6 +138,9 @@ List reusable skills:
 
 ```bash
 researchinfra skill list --workspace /tmp/ri-demo
+researchinfra skill list --workspace /tmp/ri-demo --category reading
+researchinfra skill show paper_card --workspace /tmp/ri-demo
+researchinfra skill create my_reader --workspace /tmp/ri-demo --category reading
 ```
 
 Dry-run a skill to inspect the prompt without calling a model:
@@ -151,6 +154,20 @@ researchinfra skill run paper_card \
 
 Running without `--dry-run` uses the OpenAI-compatible provider when
 `OPENAI_API_KEY` is configured.
+
+## Reading
+
+Render or save reading notes for a paper source:
+
+```bash
+researchinfra paper read src-... --workspace /tmp/ri-demo --mode skim --dry-run
+researchinfra paper read src-... --workspace /tmp/ri-demo --mode deep
+```
+
+Available modes are `skim`, `deep`, `idea`, `reviewer`, `reproduce`, and
+`related_work`. Saved notes live under `memory/readings/<reading-id>/notes.md`
+with sibling `metadata.yaml`. If no provider is configured, ResearchInfra saves
+an explicit prompt-only artifact rather than inventing a reading.
 
 ## Models
 

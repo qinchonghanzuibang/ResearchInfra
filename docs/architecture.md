@@ -16,6 +16,8 @@ authentication, and provider-specific assumptions in the v1 foundation.
    OpenClaw.
 5. **Model providers** route inference to provider adapters such as
    OpenAI-compatible APIs, LiteLLM, Ollama, Anthropic, OpenRouter, and vLLM.
+6. **Skills** package reusable research workflows as local YAML metadata plus
+   Markdown prompt templates that can be overridden per workspace.
 
 ## Design Boundaries
 
@@ -30,6 +32,6 @@ approval explicit.
   changing workspace layout.
 - Add concrete model providers by subclassing `ModelProvider`.
 - Add concrete agent runners by subclassing `AgentBackend`.
-- Add workspace-local skills by creating directories under `skills/`.
+- Add workspace-local skills as `skills/<category>/<skill-name>.yaml` plus an
+  optional Markdown prompt template.
 - Add venue templates under `templates/venues/<venue>/`.
-

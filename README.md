@@ -29,7 +29,10 @@ experiment tracker. It is a clean substrate for serious research infrastructure.
 - Feed and inbox commands for discovering sources before promotion.
 - Document extraction commands for reading local PDFs, Markdown/text files, and
   lightweight HTML sources into file-first document records.
-- Skill commands for listing reusable research workflows and dry-running prompts.
+- Skill commands for listing, inspecting, creating, and dry-running reusable
+  research workflows.
+- Paper reading modes for skim, deep, idea, reviewer, reproduce, and
+  related-work passes, with notes saved under `memory/readings/`.
 - Optional OpenAI-compatible model calls through environment variables.
 - Paper Card and Idea Card generation as Markdown plus YAML metadata.
 - Pydantic schemas for core research objects:
@@ -122,6 +125,8 @@ Dry-run a built-in skill to inspect the rendered prompt before any model call:
 
 ```bash
 researchinfra skill list --workspace /tmp/ri-demo
+researchinfra skill list --workspace /tmp/ri-demo --category reading
+researchinfra skill show paper_card --workspace /tmp/ri-demo
 researchinfra skill run paper_card \
   --workspace /tmp/ri-demo \
   --input src-... \
@@ -184,6 +189,10 @@ Extract source content before creating evidence-grounded cards:
 researchinfra source extract src-... --workspace /tmp/ri-demo
 researchinfra document show doc-... --workspace /tmp/ri-demo
 researchinfra document chunks doc-... --workspace /tmp/ri-demo --limit 3
+researchinfra paper read src-... \
+  --workspace /tmp/ri-demo \
+  --mode deep \
+  --dry-run
 researchinfra paper create-card src-... \
   --workspace /tmp/ri-demo \
   --use-content \
@@ -192,8 +201,10 @@ researchinfra paper create-card src-... \
 
 Extracted text is stored under `memory/documents/<document-id>/text.md`;
 document metadata is stored in `memory/documents/<document-id>/metadata.yaml`.
-Paper Card prompts with `--use-content` include document chunks and explicit
-instructions to cite evidence spans by document and chunk id.
+Reading outputs are stored under `memory/readings/<reading-id>/notes.md` with
+metadata in `metadata.yaml`. Paper Card prompts with `--use-content` and paper
+reading prompts include document chunks and explicit instructions to cite
+evidence spans by document and chunk id.
 
 ## Architecture
 

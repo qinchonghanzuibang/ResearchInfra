@@ -27,6 +27,7 @@ WORKSPACE_DIRECTORIES: tuple[str, ...] = (
     "memory",
     "memory/documents",
     "memory/papers",
+    "memory/readings",
     "memory/claims",
     "memory/ideas",
     "memory/reviews",
@@ -38,10 +39,6 @@ WORKSPACE_DIRECTORIES: tuple[str, ...] = (
     "drafts",
     "submissions",
     "skills",
-    "skills/paper_card",
-    "skills/idea_card",
-    "skills/claim_check",
-    "skills/experiment_plan",
     "skills/reading",
     "skills/ideation",
     "skills/experiment-planning",
@@ -216,19 +213,27 @@ def _write_builtin_skill_files(workspace_path: Path) -> None:
     from researchinfra.skills import BUILTIN_SKILLS
 
     for skill in BUILTIN_SKILLS.values():
-        base = workspace_path / "skills" / skill.name
+        base = workspace_path / "skills" / skill.category
         _write_yaml(
-            base / "skill.yaml",
+            base / f"{skill.name}.yaml",
             {
                 "name": skill.name,
+                "category": skill.category,
                 "description": skill.description,
+                "input_type": skill.input_type,
+                "output_type": skill.output_type,
+                "required_context": skill.required_context,
+                "recommended_model": skill.recommended_model,
+                "version": skill.version,
+                "author": skill.author,
+                "tags": skill.tags,
                 "inputs": skill.inputs,
                 "outputs": skill.outputs,
                 "recommended_model_tier": skill.recommended_model_tier,
-                "prompt": "prompt.md",
+                "prompt_template": f"{skill.name}.md",
             },
         )
-        _write_file(base / "prompt.md", skill.prompt_template)
+        _write_file(base / f"{skill.name}.md", skill.prompt_template)
 
 
 def _write_venue_templates(workspace_path: Path) -> None:

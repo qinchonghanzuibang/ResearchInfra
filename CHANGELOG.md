@@ -11,5 +11,6 @@ layout changes explicit.
 - Add typed schemas for core research objects.
 - Add CLI workspace initialization.
 - Add placeholder agent backend and model provider interfaces.
+- Add workspace-local skill metadata, overrides, and built-in paper reading modes.
+- Add saved paper reading notes under `memory/readings/`.
 - Add docs, examples, tests, and open-source project metadata.
-

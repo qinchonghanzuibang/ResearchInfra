@@ -65,8 +65,11 @@ spans to ask models to cite explicit evidence.
 
 ## Skills
 
-`Skill` records describe reusable prompt workflows with metadata, expected
-inputs and outputs, a recommended model tier, and a prompt template.
+`Skill` records describe reusable prompt workflows with category, input type,
+output type, required context, recommended model, version, author, tags,
+expected inputs and outputs, and a prompt template. Prompt rendering can provide
+source metadata, extracted document chunks, evidence instructions, output
+schema guidance, warnings, and legacy source fields.
 
 ## Compatibility
 
