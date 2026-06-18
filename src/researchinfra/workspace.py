@@ -25,6 +25,7 @@ WORKSPACE_DIRECTORIES: tuple[str, ...] = (
     "sources/papers",
     "sources/bib",
     "memory",
+    "memory/documents",
     "memory/papers",
     "memory/claims",
     "memory/ideas",
