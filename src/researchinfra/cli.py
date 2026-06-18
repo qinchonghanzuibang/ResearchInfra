@@ -19,6 +19,12 @@ from researchinfra.discovery import (
     InboxItemNotFoundError,
     SourceEnricher,
 )
+from researchinfra.documents import (
+    DocumentError,
+    DocumentExtractor,
+    DocumentNotFoundError,
+    DocumentStore,
+)
 from researchinfra.models.adapters import OpenAICompatibleProvider
 from researchinfra.models.base import ModelProviderConfigurationError, ModelProviderRequestError
 from researchinfra.schemas import ModelProviderConfig
@@ -78,6 +84,30 @@ def build_parser() -> argparse.ArgumentParser:
     source_enrich = source_subparsers.add_parser("enrich", help="Enrich source metadata.")
     source_enrich.add_argument("source_id", help="Source id to enrich.")
     source_enrich.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+
+    source_extract = source_subparsers.add_parser("extract", help="Extract source content.")
+    source_extract.add_argument("source_id", help="Source id to extract.")
+    source_extract.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    source_extract.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-extract even when a document already exists.",
+    )
+
+    document_parser = subparsers.add_parser("document", help="Inspect extracted documents.")
+    document_subparsers = document_parser.add_subparsers(dest="document_command")
+    document_list = document_subparsers.add_parser("list", help="List extracted documents.")
+    document_list.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+
+    document_show = document_subparsers.add_parser("show", help="Show extracted document text.")
+    document_show.add_argument("document_id", help="Document id.")
+    document_show.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    document_show.add_argument("--section", help="Optional section name, such as body or page-1.")
+
+    document_chunks = document_subparsers.add_parser("chunks", help="Show document chunks.")
+    document_chunks.add_argument("document_id", help="Document id.")
+    document_chunks.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    document_chunks.add_argument("--limit", type=int, default=10, help="Maximum chunks to print.")
 
     feed_parser = subparsers.add_parser("feed", help="Manage discovery feeds.")
     feed_subparsers = feed_parser.add_subparsers(dest="feed_command")
@@ -145,6 +175,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print the rendered paper-card prompt instead of writing a card.",
     )
+    paper_card.add_argument(
+        "--use-content",
+        action="store_true",
+        help="Include extracted document chunks and evidence instructions.",
+    )
 
     idea_parser = subparsers.add_parser("idea", help="Generate research idea artifacts.")
     idea_subparsers = idea_parser.add_subparsers(dest="idea_command")
@@ -187,6 +222,9 @@ def run(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "inbox":
         return _run_inbox(args)
+
+    if args.command == "document":
+        return _run_document(args)
 
     if args.command == "skill":
         return _run_skill(args)
@@ -245,7 +283,67 @@ def _run_source(args: argparse.Namespace) -> int:
         print(yaml.safe_dump(source.model_dump(mode="json"), sort_keys=False).strip())
         return 0
 
-    return _error("source requires a subcommand: add, list, show, or enrich", code=2)
+    if args.source_command == "extract":
+        try:
+            document = DocumentExtractor(args.workspace).extract(args.source_id, force=args.force)
+        except (DocumentError, SourceNotFoundError) as exc:
+            return _error(str(exc), code=2)
+        print(f"Extracted document: {document.id}")
+        print(f"Status: {document.extraction_status}")
+        print(f"Text: {document.text_path}")
+        print(f"Metadata: {document.metadata_path}")
+        if document.warnings:
+            print("Warnings:")
+            for warning in document.warnings:
+                print(f"- {warning}")
+        return 0
+
+    return _error("source requires a subcommand: add, list, show, enrich, or extract", code=2)
+
+
+def _run_document(args: argparse.Namespace) -> int:
+    store = DocumentStore(args.workspace)
+    if args.document_command == "list":
+        documents = store.list()
+        if not documents:
+            print("No documents extracted.")
+            return 0
+        for document in documents:
+            print(
+                f"{document.id}\t{document.source_id}\t{document.content_type}\t"
+                f"{document.extraction_status}\t{document.title or '(untitled)'}"
+            )
+        return 0
+
+    if args.document_command == "show":
+        try:
+            document = store.get(args.document_id)
+            text = store.read_text(document)
+        except DocumentNotFoundError as exc:
+            return _error(str(exc), code=2)
+        if args.section:
+            section = next((item for item in document.sections if item.name == args.section), None)
+            if section is None:
+                return _error(f"Section not found: {args.section}", code=2)
+            start = section.start_char or 0
+            end = section.end_char if section.end_char is not None else len(text)
+            print(text[start:end].strip())
+        else:
+            print(text)
+        return 0
+
+    if args.document_command == "chunks":
+        try:
+            document = store.get(args.document_id)
+        except DocumentNotFoundError as exc:
+            return _error(str(exc), code=2)
+        for chunk in document.chunks[: args.limit]:
+            print(f"{chunk.id}\tsection={chunk.section or 'body'}")
+            print(chunk.text)
+            print("")
+        return 0
+
+    return _error("document requires a subcommand: list, show, or chunks", code=2)
 
 
 def _run_feed(args: argparse.Namespace) -> int:
@@ -388,13 +486,19 @@ def _run_paper(args: argparse.Namespace) -> int:
         return _error("paper requires a subcommand: create-card", code=2)
     if args.dry_run:
         try:
-            print(SkillRunner(args.workspace).render("paper_card", args.source_id))
-        except (SkillNotFoundError, SourceNotFoundError) as exc:
+            print(
+                PaperCardService(args.workspace).render_prompt(
+                    args.source_id, use_content=args.use_content
+                )
+            )
+        except (CardError, SkillNotFoundError, SourceNotFoundError) as exc:
             return _error(str(exc), code=2)
         return 0
 
     try:
-        paper_id, markdown_path, yaml_path = PaperCardService(args.workspace).create(args.source_id)
+        paper_id, markdown_path, yaml_path = PaperCardService(args.workspace).create(
+            args.source_id, use_content=args.use_content
+        )
     except (CardError, SourceNotFoundError) as exc:
         return _error(str(exc), code=2)
     print(f"Created Paper Card: {paper_id}")

@@ -247,3 +247,71 @@ def test_cli_feed_inbox_and_enrich_workflow(tmp_path, capsys) -> None:  # type: 
 
     assert run(["inbox", "skip", item_id, "--workspace", str(workspace)]) == 0
     assert "Skipped inbox item" in capsys.readouterr().out
+
+
+def test_cli_source_extract_document_and_paper_prompt(tmp_path, capsys) -> None:  # type: ignore[no-untyped-def]
+    workspace = tmp_path / "workspace"
+    assert run(["init", str(workspace)]) == 0
+    capsys.readouterr()
+    source_file = workspace / "sources" / "paper.md"
+    source_file.parent.mkdir(parents=True, exist_ok=True)
+    source_file.write_text("# Demo\n\nThis is extracted evidence.", encoding="utf-8")
+
+    assert (
+        run(
+            [
+                "source",
+                "add",
+                str(source_file),
+                "--workspace",
+                str(workspace),
+                "--type",
+                "paper",
+                "--title",
+                "Demo",
+            ]
+        )
+        == 0
+    )
+    add_output = capsys.readouterr().out
+    source_id = next(
+        line.split(": ", 1)[1] for line in add_output.splitlines() if line.startswith("Added")
+    )
+
+    assert run(["source", "extract", source_id, "--workspace", str(workspace)]) == 0
+    extract_output = capsys.readouterr().out
+    document_id = next(
+        line.split(": ", 1)[1]
+        for line in extract_output.splitlines()
+        if line.startswith("Extracted document")
+    )
+
+    assert run(["document", "list", "--workspace", str(workspace)]) == 0
+    assert document_id in capsys.readouterr().out
+
+    assert run(["document", "show", document_id, "--workspace", str(workspace)]) == 0
+    assert "This is extracted evidence" in capsys.readouterr().out
+
+    assert (
+        run(["document", "chunks", document_id, "--workspace", str(workspace), "--limit", "1"]) == 0
+    )
+    assert "chunk-0001" in capsys.readouterr().out
+
+    assert (
+        run(
+            [
+                "paper",
+                "create-card",
+                source_id,
+                "--workspace",
+                str(workspace),
+                "--use-content",
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+    prompt = capsys.readouterr().out
+    assert "Extracted document evidence" in prompt
+    assert "chunk-0001" in prompt
+    assert "Do not infer claims" in prompt

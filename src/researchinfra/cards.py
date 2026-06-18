@@ -8,6 +8,7 @@ from textwrap import dedent
 
 import yaml
 
+from researchinfra.documents import DocumentStore, evidence_prompt_context
 from researchinfra.models.adapters import OpenAICompatibleProvider
 from researchinfra.models.base import ModelProviderRequestError
 from researchinfra.schemas import ModelProviderConfig, Source, utc_now
@@ -26,20 +27,45 @@ class PaperCardService:
         self.workspace = Path(workspace).expanduser().resolve()
         self.registry = SourceRegistry(self.workspace)
         self.runner = SkillRunner(self.workspace)
+        self.documents = DocumentStore(self.workspace)
 
-    def create(self, source_id: str) -> tuple[str, Path, Path]:
+    def render_prompt(self, source_id: str, *, use_content: bool = False) -> str:
+        """Render the Paper Card prompt for a source."""
+
+        prompt = self.runner.render("paper_card", source_id)
+        if not use_content:
+            return prompt
+        document = self.documents.find_by_source_id(source_id)
+        if document is None:
+            return (
+                prompt
+                + "\n\n"
+                + "Extracted document evidence:\n"
+                + "- No extracted document found for this source. Run "
+                + "`researchinfra source extract <source-id> --workspace <workspace>` first.\n"
+                + "\nEvidence instructions:\n"
+                + "- State that no extracted content was available.\n"
+                + "- Do not fabricate evidence spans."
+            )
+        return prompt + "\n\n" + evidence_prompt_context(document)
+
+    def create(self, source_id: str, *, use_content: bool = False) -> tuple[str, Path, Path]:
         """Create a Paper Card markdown file and YAML metadata."""
 
         source = self.registry.get(source_id)
         paper_id = f"paper-{source.id.removeprefix('src-')}"
-        prompt = self.runner.render("paper_card", source_id)
+        document = self.documents.find_by_source_id(source_id) if use_content else None
+        prompt = self.render_prompt(source_id, use_content=use_content)
         content = _complete_or_metadata_skeleton(
             prompt,
-            fallback=_paper_fallback_markdown(paper_id, source),
+            fallback=_paper_fallback_markdown(
+                paper_id, source, document_id=document.id if document else None
+            ),
         )
         metadata = {
             "id": paper_id,
             "source_id": source.id,
+            "document_id": document.id if document else None,
             "title": source.title,
             "source_type": source.source_type,
             "target": source.target,
@@ -104,7 +130,12 @@ def _complete_or_metadata_skeleton(prompt: str, *, fallback: str) -> str:
     return fallback
 
 
-def _paper_fallback_markdown(paper_id: str, source: Source) -> str:
+def _paper_fallback_markdown(paper_id: str, source: Source, *, document_id: str | None) -> str:
+    evidence_text = (
+        f"Extracted document `{document_id}` is available. Review its chunks before making claims."
+        if document_id
+        else "No extracted document content has been attached yet."
+    )
     return dedent(
         f"""
         # Paper Card: {source.title or paper_id}
@@ -124,9 +155,12 @@ def _paper_fallback_markdown(paper_id: str, source: Source) -> str:
 
         The workspace currently records this source and any manually provided title or tags.
 
-        ## Evidence Available
+        ## Evidence
 
-        No parsed paper text or experimental evidence has been attached yet.
+        {evidence_text}
+
+        Any future claim must cite explicit document chunks, papers, experiments, figures,
+        tables, or run records.
 
         ## Missing Evidence And Uncertainty
 
