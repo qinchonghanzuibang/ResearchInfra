@@ -4,8 +4,12 @@ from pydantic import ValidationError
 from researchinfra.schemas import (
     AgentBackendConfig,
     Claim,
+    Document,
+    DocumentChunk,
+    DocumentSection,
     Draft,
     EvidenceLink,
+    EvidenceSpan,
     Experiment,
     Feed,
     Idea,
@@ -47,6 +51,24 @@ def test_core_schemas_validate_minimal_objects() -> None:
         title="Inbox Paper",
         url="https://arxiv.org/abs/1234.5678",
     )
+    document = Document(
+        id="doc:example",
+        source_id=source.id,
+        title="Document",
+        content_type="text",
+        text_path="memory/documents/doc/text.md",
+        metadata_path="memory/documents/doc/metadata.yaml",
+        sections=[DocumentSection(name="body", start_char=0, end_char=10)],
+        chunks=[DocumentChunk(id="chunk-0001", text="Evidence text", start_char=0, end_char=13)],
+        extraction_status="succeeded",
+    )
+    evidence_span = EvidenceSpan(
+        document_id=document.id,
+        source_id=source.id,
+        section="body",
+        chunk_id="chunk-0001",
+        quote="Evidence text",
+    )
     skill = Skill(
         name="paper_card",
         description="Create a Paper Card.",
@@ -68,6 +90,8 @@ def test_core_schemas_validate_minimal_objects() -> None:
     assert source.source_type == "web"
     assert feed.type == "arxiv"
     assert inbox_item.status == "new"
+    assert document.chunks[0].id == "chunk-0001"
+    assert evidence_span.quote == "Evidence text"
     assert skill.name == "paper_card"
     assert workspace.schema_version == "0.1"
 

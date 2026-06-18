@@ -139,6 +139,56 @@ class InboxItem(ResearchInfraModel):
     updated_at: datetime = Field(default_factory=utc_now)
 
 
+ContentType = Literal["pdf", "markdown", "text", "html", "metadata", "unknown"]
+ExtractionStatus = Literal["pending", "succeeded", "partial", "failed"]
+
+
+class DocumentSection(ResearchInfraModel):
+    """A coarse section in an extracted document."""
+
+    name: str = Field(..., min_length=1)
+    start_char: int | None = Field(default=None, ge=0)
+    end_char: int | None = Field(default=None, ge=0)
+
+
+class DocumentChunk(ResearchInfraModel):
+    """A small inspectable chunk of extracted document text."""
+
+    id: str = Field(..., min_length=1)
+    section: str | None = None
+    text: str = Field(..., min_length=1)
+    start_char: int | None = Field(default=None, ge=0)
+    end_char: int | None = Field(default=None, ge=0)
+
+
+class EvidenceSpan(ResearchInfraModel):
+    """A source-linked excerpt that can ground generated research text."""
+
+    document_id: str = Field(..., min_length=1)
+    source_id: str = Field(..., min_length=1)
+    section: str | None = None
+    chunk_id: str | None = None
+    quote: str = Field(..., min_length=1)
+    start_char: int | None = Field(default=None, ge=0)
+    end_char: int | None = Field(default=None, ge=0)
+
+
+class Document(ResearchInfraModel):
+    """Extracted source content stored as local text and YAML metadata."""
+
+    id: str = Field(..., min_length=1)
+    source_id: str = Field(..., min_length=1)
+    title: str | None = None
+    content_type: ContentType = "unknown"
+    text_path: str = Field(..., min_length=1)
+    metadata_path: str = Field(..., min_length=1)
+    sections: list[DocumentSection] = Field(default_factory=list)
+    chunks: list[DocumentChunk] = Field(default_factory=list)
+    extraction_status: ExtractionStatus = "pending"
+    warnings: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
 class Claim(ResearchInfraModel):
     """A research claim that can be grounded in explicit evidence."""
 
