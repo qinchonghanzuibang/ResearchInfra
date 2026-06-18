@@ -27,6 +27,8 @@ experiment tracker. It is a clean substrate for serious research infrastructure.
 - `researchinfra init <workspace>` to create a local workspace.
 - Source registry commands for adding, listing, and inspecting local files and URLs.
 - Feed and inbox commands for discovering sources before promotion.
+- Document extraction commands for reading local PDFs, Markdown/text files, and
+  lightweight HTML sources into file-first document records.
 - Skill commands for listing reusable research workflows and dry-running prompts.
 - Optional OpenAI-compatible model calls through environment variables.
 - Paper Card and Idea Card generation as Markdown plus YAML metadata.
@@ -164,6 +166,8 @@ researchinfra inbox list --workspace /tmp/ri-demo
 researchinfra inbox show inbox-... --workspace /tmp/ri-demo
 researchinfra inbox promote inbox-... --workspace /tmp/ri-demo
 researchinfra source enrich src-... --workspace /tmp/ri-demo
+researchinfra source extract src-... --workspace /tmp/ri-demo
+researchinfra document list --workspace /tmp/ri-demo
 researchinfra paper create-card src-... --workspace /tmp/ri-demo
 ```
 
@@ -171,6 +175,25 @@ Feeds and inbox items are stored as local YAML files under `.researchinfra/`.
 arXiv and RSS/Atom sync extract lightweight metadata only: title, URL, authors,
 abstract or summary, published date, external id, PDF URL when available, and
 tags. ResearchInfra does not download PDFs or scrape web pages during discovery.
+
+## Content Extraction
+
+Extract source content before creating evidence-grounded cards:
+
+```bash
+researchinfra source extract src-... --workspace /tmp/ri-demo
+researchinfra document show doc-... --workspace /tmp/ri-demo
+researchinfra document chunks doc-... --workspace /tmp/ri-demo --limit 3
+researchinfra paper create-card src-... \
+  --workspace /tmp/ri-demo \
+  --use-content \
+  --dry-run
+```
+
+Extracted text is stored under `memory/documents/<document-id>/text.md`;
+document metadata is stored in `memory/documents/<document-id>/metadata.yaml`.
+Paper Card prompts with `--use-content` include document chunks and explicit
+instructions to cite evidence spans by document and chunk id.
 
 ## Architecture
 
@@ -223,6 +246,7 @@ make format
 The package keeps dependencies small:
 
 - `pydantic` for typed schemas and validation.
+- `pypdf` for lightweight local PDF text extraction.
 - `PyYAML` for human-readable workspace configuration.
 - `pytest` and `ruff` as optional development dependencies.
 

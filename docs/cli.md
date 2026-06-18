@@ -54,6 +54,36 @@ For arXiv URLs, enrichment can add an arXiv external id and PDF URL without
 downloading the PDF. If the arXiv API is reachable, it may also add title,
 authors, abstract, and published date.
 
+Extract source content into a local document record:
+
+```bash
+researchinfra source extract src-... --workspace /tmp/ri-demo
+researchinfra source extract src-... --workspace /tmp/ri-demo --force
+```
+
+Extraction stores text and YAML metadata under `memory/documents/`.
+
+## Documents
+
+List extracted documents:
+
+```bash
+researchinfra document list --workspace /tmp/ri-demo
+```
+
+Show document text or a specific section:
+
+```bash
+researchinfra document show doc-... --workspace /tmp/ri-demo
+researchinfra document show doc-... --workspace /tmp/ri-demo --section page-1
+```
+
+Inspect chunks:
+
+```bash
+researchinfra document chunks doc-... --workspace /tmp/ri-demo --limit 5
+```
+
 ## Feeds
 
 Add an arXiv feed:
@@ -142,6 +172,7 @@ Create a Paper Card:
 
 ```bash
 researchinfra paper create-card src-... --workspace /tmp/ri-demo
+researchinfra paper create-card src-... --workspace /tmp/ri-demo --use-content --dry-run
 ```
 
 Generate an Idea Card from a Paper Card:

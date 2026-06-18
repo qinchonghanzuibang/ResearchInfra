@@ -8,6 +8,10 @@ The core schemas live in `researchinfra.schemas` and use Pydantic v2.
 - `Feed`
 - `InboxItem`
 - `Source`
+- `Document`
+- `DocumentChunk`
+- `DocumentSection`
+- `EvidenceSpan`
 - `Paper`
 - `Claim`
 - `Idea`
@@ -47,6 +51,17 @@ RSS feeds, Atom feeds, or web links. They are stored in
 into the source registry. Inbox items include title, URL, abstract, authors,
 published date, external id, tags, status, and raw metadata. They are stored in
 `.researchinfra/inbox.yaml`.
+
+## Documents And Evidence
+
+`Document` records describe extracted source content stored under
+`memory/documents/<document-id>/`. Each document points to `text.md` and
+`metadata.yaml`, records extraction status and warnings, and stores sections and
+chunks.
+
+`EvidenceSpan` records identify a document, source, section, chunk id, quote or
+short excerpt, and optional character offsets. Paper Card prompts can use these
+spans to ask models to cite explicit evidence.
 
 ## Skills
 

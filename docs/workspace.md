@@ -10,6 +10,7 @@ places for research state:
 .researchinfra/sources.yaml
 sources/               Papers, BibTeX, PDFs, and external references
 memory/                Claims, ideas, reviews, and durable notes
+memory/documents/      Extracted document text and metadata
 memory/papers/         Generated Paper Cards and metadata
 projects/              Scoped research efforts
 experiments/           Experiment plans and baseline definitions
@@ -30,4 +31,5 @@ configuration. Credentials should not be stored in workspace files.
 Feed registry records are stored in `.researchinfra/feeds.yaml`; discovered
 inbox items are stored in `.researchinfra/inbox.yaml`; promoted source records
 are stored in `.researchinfra/sources.yaml`. Generated Paper Cards live under
-`memory/papers/`; generated Idea Cards live under `memory/ideas/`.
+`memory/papers/`; generated Idea Cards live under `memory/ideas/`. Extracted
+document text and metadata live under `memory/documents/<document-id>/`.

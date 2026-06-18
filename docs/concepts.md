@@ -16,6 +16,16 @@ An inbox item is a discovered source candidate that has not yet been promoted
 into the main source registry. Researchers can inspect, promote, or skip inbox
 items.
 
+## Document
+
+A document is extracted source content stored in the workspace. Documents keep
+plain text, metadata, sections, chunks, extraction status, and warnings.
+
+## Evidence Span
+
+An evidence span is a short excerpt tied to a document, source, section, and
+chunk id. Generated cards should cite spans instead of making unsupported claims.
+
 ## Claim
 
 A claim is a statement that should be linkable to evidence. Claims can begin as
