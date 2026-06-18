@@ -33,6 +33,10 @@ experiment tracker. It is a clean substrate for serious research infrastructure.
   research workflows.
 - Paper reading modes for skim, deep, idea, reviewer, reproduce, and
   related-work passes, with notes saved under `memory/readings/`.
+- Project creation from ideas, Paper Cards, readings, or manual names, with
+  project-local context, experiment, draft, agent, and review directories.
+- Experiment planning registries, draft outline/section scaffolds, and agent
+  task specs that preserve evidence and human approval gates.
 - Optional OpenAI-compatible model calls through environment variables.
 - Paper Card and Idea Card generation as Markdown plus YAML metadata.
 - Pydantic schemas for core research objects:
@@ -206,6 +210,51 @@ metadata in `metadata.yaml`. Paper Card prompts with `--use-content` and paper
 reading prompts include document chunks and explicit instructions to cite
 evidence spans by document and chunk id.
 
+## End-To-End V1 Workflow
+
+The v1 workflow turns local evidence into a project without inventing results:
+
+```bash
+researchinfra source extract src-... --workspace /tmp/ri-demo
+researchinfra paper create-card src-... --workspace /tmp/ri-demo --use-content
+researchinfra paper read src-... --workspace /tmp/ri-demo --mode idea
+researchinfra idea generate --workspace /tmp/ri-demo --from-paper paper-...
+
+researchinfra project create \
+  --workspace /tmp/ri-demo \
+  --name "Grounded Evaluation Study" \
+  --from-paper paper-... \
+  --from-reading reading-... \
+  --from-idea idea-...
+researchinfra project status project-grounded-evaluation-study --workspace /tmp/ri-demo
+
+researchinfra experiment plan \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo \
+  --dry-run
+researchinfra experiment plan \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo
+
+researchinfra draft outline \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo \
+  --venue acl \
+  --dry-run
+researchinfra agent task create \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo \
+  --type writing \
+  --title "Draft limitations section"
+```
+
+Project state lives under `projects/<project-slug>/`. Experiment files are
+written under `experiments/`, draft scaffolds under `draft/`, and agent task
+specs under `agents/tasks/`. These artifacts are intentionally conservative:
+they warn about missing evidence, missing experiments, and unsupported claims.
+Metrics enter the workspace only through explicit run records such as
+`researchinfra experiment add-run --metric name=value`.
+
 ## Architecture
 
 ResearchInfra separates durable research state from execution.
@@ -266,8 +315,8 @@ The package keeps dependencies small:
 - Durable file readers and writers for every schema.
 - Import pipelines for BibTeX, PDFs, arXiv metadata, and paper notes.
 - Claim-to-evidence maps for drafts and figures.
-- Experiment and run record helpers with immutable audit trails.
-- Agent task queues with explicit human approval gates.
+- Richer experiment and run record helpers with immutable audit trails.
+- Agent task queues with backend execution behind explicit human approval gates.
 - Real provider adapters and local command backends.
 - Venue-aware submission packaging.
 - Reproducibility checks across papers, claims, experiments, and drafts.

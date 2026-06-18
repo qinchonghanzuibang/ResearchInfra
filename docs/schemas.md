@@ -16,7 +16,12 @@ The core schemas live in `researchinfra.schemas` and use Pydantic v2.
 - `Claim`
 - `Idea`
 - `Project`
+- `Baseline`
+- `Ablation`
+- `ExperimentPlan`
 - `Experiment`
+- `ResultRecord`
+- `ClaimEvidenceLink`
 - `Run`
 - `Draft`
 - `Review`
@@ -70,6 +75,21 @@ output type, required context, recommended model, version, author, tags,
 expected inputs and outputs, and a prompt template. Prompt rendering can provide
 source metadata, extracted document chunks, evidence instructions, output
 schema guidance, warnings, and legacy source fields.
+
+## Projects And Experiments
+
+`Project` records now carry the project brain: thesis, research question,
+motivation, linked papers/readings/ideas, claims, open questions, decisions,
+risks, next actions, target venue, and status.
+
+`Baseline`, `Ablation`, `ExperimentPlan`, `ResultRecord`, and
+`ClaimEvidenceLink` support the file-first experiment workflow. These schemas
+record proposed comparisons, missing evidence, user-provided run metrics, and
+claim-to-evidence status without fabricating results.
+
+`AgentTask` records include task type, project id, context files, expected
+outputs, constraints, verification commands, and suggested backend. Task
+creation records intent; it does not execute an agent backend.
 
 ## Compatibility
 

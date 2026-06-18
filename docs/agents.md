@@ -18,6 +18,21 @@ Concrete adapters should subclass `AgentBackend` and return
 `AgentBackendResult`. Agent tasks should remain file-first and should require
 human approval before changing claims, results, or submissions.
 
+Project-local task specs are created with:
+
+```bash
+researchinfra agent task create \
+  --project project-... \
+  --workspace /tmp/ri-demo \
+  --type coding \
+  --title "Implement baseline loader"
+```
+
+The command writes YAML under `projects/<project-slug>/agents/tasks/` with
+context files, expected outputs, constraints, verification commands, and a
+suggested backend. It does not execute Codex, Claude Code, OpenHands, OpenClaw,
+or any other backend.
+
 ## Model Providers
 
 Supported provider configuration kinds:

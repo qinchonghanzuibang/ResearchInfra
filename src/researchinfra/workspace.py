@@ -41,11 +41,13 @@ WORKSPACE_DIRECTORIES: tuple[str, ...] = (
     "skills",
     "skills/reading",
     "skills/ideation",
+    "skills/project-planning",
     "skills/experiment-planning",
     "skills/writing",
     "skills/reviewing",
     "skills/latex",
     "skills/submission",
+    "skills/agents",
     "agents",
     "agents/tasks",
     "agents/backends",
@@ -62,11 +64,13 @@ WORKSPACE_DIRECTORIES: tuple[str, ...] = (
 SKILL_DESCRIPTIONS: dict[str, str] = {
     "reading": "Extract grounded notes from papers while preserving citations and uncertainty.",
     "ideation": "Develop and triage research ideas without inventing unsupported evidence.",
+    "project-planning": "Turn papers, readings, and ideas into scoped project state.",
     "experiment-planning": "Turn claims and questions into executable experiment plans.",
     "writing": "Draft sections that link claims to papers, runs, figures, and tables.",
     "reviewing": "Review drafts, claims, and plans with human approval gates.",
     "latex": "Assist with LaTeX structure, references, tables, and venue constraints.",
     "submission": "Prepare checklists and packaging notes for venue submission workflows.",
+    "agents": "Specify human-approved agent tasks without executing backends.",
 }
 
 VENUES: tuple[str, ...] = ("acl", "neurips", "iclr", "icml", "arxiv")

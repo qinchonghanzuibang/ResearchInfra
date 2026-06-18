@@ -13,4 +13,5 @@ layout changes explicit.
 - Add placeholder agent backend and model provider interfaces.
 - Add workspace-local skill metadata, overrides, and built-in paper reading modes.
 - Add saved paper reading notes under `memory/readings/`.
+- Add project, experiment, draft, and agent task workflow commands.
 - Add docs, examples, tests, and open-source project metadata.

@@ -2,8 +2,12 @@ import pytest
 from pydantic import ValidationError
 
 from researchinfra.schemas import (
+    Ablation,
     AgentBackendConfig,
+    AgentTask,
+    Baseline,
     Claim,
+    ClaimEvidenceLink,
     Document,
     DocumentChunk,
     DocumentSection,
@@ -11,12 +15,14 @@ from researchinfra.schemas import (
     EvidenceLink,
     EvidenceSpan,
     Experiment,
+    ExperimentPlan,
     Feed,
     Idea,
     InboxItem,
     ModelProviderConfig,
     Paper,
     Project,
+    ResultRecord,
     Review,
     Run,
     Skill,
@@ -39,7 +45,21 @@ def test_core_schemas_validate_minimal_objects() -> None:
         project_id=project.id,
         title="Evaluate evidence mapping workflow",
     )
+    baseline = Baseline(id="baseline:example", name="Current baseline")
+    ablation = Ablation(id="ablation:example", factor="data_quality", levels=["low", "high"])
+    experiment_plan = ExperimentPlan(
+        id="experiment-plan:example",
+        project_id=project.id,
+        title="Plan",
+        baselines=[baseline],
+        ablations=[ablation],
+    )
     run = Run(id="run:example", experiment_id=experiment.id, metrics={"status": "not_run"})
+    result = ResultRecord(
+        id="result:example",
+        experiment_id=experiment.id,
+        metrics={"accuracy": 0.5},
+    )
     draft = Draft(id="draft:example", title="Draft", claims=[claim.id])
     review = Review(id="review:example", reviewer="human")
     source = Source(id="source:example", target="https://example.com", source_type="web")
@@ -69,6 +89,22 @@ def test_core_schemas_validate_minimal_objects() -> None:
         chunk_id="chunk-0001",
         quote="Evidence text",
     )
+    claim_evidence = ClaimEvidenceLink(
+        claim_id=claim.id,
+        evidence=[EvidenceLink(kind="run", ref=run.id)],
+        status="partial",
+    )
+    agent_task = AgentTask(
+        id="task:example",
+        title="Draft section",
+        task_type="writing",
+        project_id=project.id,
+        backend="manual",
+        context_files=["projects/demo/project.yaml"],
+        expected_outputs=["draft"],
+        constraints=["Do not fabricate results."],
+        verification_commands=["python -m pytest"],
+    )
     skill = Skill(
         name="paper_card",
         description="Create a Paper Card.",
@@ -84,7 +120,11 @@ def test_core_schemas_validate_minimal_objects() -> None:
 
     assert claim.evidence[0].ref == paper.id
     assert idea.status == "seed"
+    assert project.research_question is None
+    assert experiment_plan.baselines[0].name == "Current baseline"
+    assert experiment_plan.ablations[0].factor == "data_quality"
     assert run.metrics["status"] == "not_run"
+    assert result.metrics["accuracy"] == 0.5
     assert draft.status == "outline"
     assert review.decision == "no_decision"
     assert source.source_type == "web"
@@ -92,6 +132,8 @@ def test_core_schemas_validate_minimal_objects() -> None:
     assert inbox_item.status == "new"
     assert document.chunks[0].id == "chunk-0001"
     assert evidence_span.quote == "Evidence text"
+    assert claim_evidence.status == "partial"
+    assert agent_task.task_type == "writing"
     assert skill.name == "paper_card"
     assert workspace.schema_version == "0.1"
 

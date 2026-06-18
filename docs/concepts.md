@@ -39,12 +39,24 @@ link to papers and claims.
 ## Project
 
 A project is a scoped research effort with owners, related ideas, claims,
-experiments, and artifacts.
+experiments, and artifacts. In the workspace, projects also carry a thesis,
+research question, motivation, linked papers/readings/ideas, open questions,
+decisions, risks, next actions, target venue, and status.
 
 ## Experiment
 
 An experiment is a plan. It records a question, method, baselines, datasets,
 metrics, and expected artifacts.
+
+## Baseline And Ablation
+
+Baselines and ablations are planned comparison objects. They can be proposed
+before implementation, but they are not evidence until linked to run records.
+
+## Result Record
+
+A result record stores user-provided run metrics and artifacts. ResearchInfra
+does not generate fake results.
 
 ## Run
 
@@ -59,3 +71,5 @@ explicit evidence.
 ## Agent Task
 
 An agent task is a human-approved work item for a manual or automated backend.
+Task specs include context files, expected outputs, constraints, verification
+commands, and a suggested backend. Creating a task does not execute the backend.

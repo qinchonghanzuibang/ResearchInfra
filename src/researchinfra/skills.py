@@ -33,6 +33,49 @@ READING_MODES: tuple[str, ...] = (
 
 
 BUILTIN_SKILLS: dict[str, Skill] = {
+    "project_brain": Skill(
+        name="project_brain",
+        category="project-planning",
+        description="Turn papers, readings, and ideas into a cautious project brain.",
+        input_type="artifact_context",
+        output_type="project_brain_markdown",
+        required_context=["metadata", "warnings", "input_text"],
+        recommended_model="standard",
+        version="0.1",
+        author="ResearchInfra",
+        tags=["project", "planning"],
+        inputs=["idea_card", "paper_card", "reading", "manual_context"],
+        outputs=["project_yaml", "project_readme", "project_context"],
+        recommended_model_tier="standard",
+        prompt_template=dedent(
+            """
+            Build a ResearchInfra project brain from the provided context.
+
+            Context:
+            $input_text
+
+            Output schema:
+            $output_schema
+
+            Include:
+            - Thesis
+            - Research question
+            - Motivation
+            - Linked papers, readings, and ideas
+            - Claims that are only hypotheses unless evidence is explicit
+            - Open questions
+            - Decisions
+            - Risks
+            - Next actions
+            - Target venue if known
+
+            Constraints:
+            - Do not fabricate paper content, citations, experiments, metrics, or results.
+            - Mark missing or partial context clearly.
+            - Keep human review requirements explicit.
+            """
+        ).strip(),
+    ),
     "paper_card": Skill(
         name="paper_card",
         category="writing",
@@ -159,10 +202,10 @@ BUILTIN_SKILLS: dict[str, Skill] = {
     "experiment_plan": Skill(
         name="experiment_plan",
         category="experiment-planning",
-        description="Draft an experiment plan from a research idea or claim.",
-        input_type="idea_or_claim",
+        description="Draft an evidence-gated experiment plan from project context.",
+        input_type="project_context",
         output_type="experiment_plan",
-        required_context=["metadata", "warnings"],
+        required_context=["input_text", "warnings", "output_schema"],
         recommended_model="standard",
         version="0.1",
         author="ResearchInfra",
@@ -172,9 +215,12 @@ BUILTIN_SKILLS: dict[str, Skill] = {
         recommended_model_tier="standard",
         prompt_template=dedent(
             """
-            Draft a ResearchInfra experiment plan from this context:
+            Draft a ResearchInfra experiment plan from this project context:
 
             $input_text
+
+            Output schema:
+            $output_schema
 
             Include:
             - Question
@@ -186,6 +232,103 @@ BUILTIN_SKILLS: dict[str, Skill] = {
             - Risks, confounders, and missing evidence
 
             Do not present any proposed experiment as already run.
+            Do not invent datasets, baselines, metrics, or results.
+            """
+        ).strip(),
+    ),
+    "draft_outline": Skill(
+        name="draft_outline",
+        category="writing",
+        description="Create an evidence-gated draft outline from project context.",
+        input_type="project_context",
+        output_type="draft_outline_markdown",
+        required_context=["input_text", "warnings", "output_schema"],
+        recommended_model="standard",
+        version="0.1",
+        author="ResearchInfra",
+        tags=["draft", "outline"],
+        inputs=["project_context"],
+        outputs=["draft_outline_markdown"],
+        recommended_model_tier="standard",
+        prompt_template=dedent(
+            """
+            Create a ResearchInfra draft outline from this project context:
+
+            $input_text
+
+            Output schema:
+            $output_schema
+
+            Required warnings:
+            - Mark missing experiments explicitly.
+            - Do not claim results unless linked to run records.
+            - Do not invent citations or related work.
+            - Link every claim to evidence or mark it as a hypothesis.
+            """
+        ).strip(),
+    ),
+    "draft_section": Skill(
+        name="draft_section",
+        category="writing",
+        description="Draft a single evidence-gated paper section from project context.",
+        input_type="project_context",
+        output_type="draft_section_markdown",
+        required_context=["input_text", "warnings", "output_schema"],
+        recommended_model="standard",
+        version="0.1",
+        author="ResearchInfra",
+        tags=["draft", "section"],
+        inputs=["project_context"],
+        outputs=["draft_section_markdown"],
+        recommended_model_tier="standard",
+        prompt_template=dedent(
+            """
+            Draft a ResearchInfra paper section from this project context:
+
+            $input_text
+
+            Output schema:
+            $output_schema
+
+            Constraints:
+            - Include evidence warnings and missing-experiment warnings.
+            - Do not claim results unless linked to run records.
+            - Do not invent citations, comparisons, metrics, or datasets.
+            - Prefer TODO markers over unsupported prose.
+            """
+        ).strip(),
+    ),
+    "agent_task": Skill(
+        name="agent_task",
+        category="agents",
+        description="Create a human-approved agent task spec from project context.",
+        input_type="project_context",
+        output_type="agent_task_yaml",
+        required_context=["input_text", "warnings", "output_schema"],
+        recommended_model="optional",
+        version="0.1",
+        author="ResearchInfra",
+        tags=["agent", "task"],
+        inputs=["project_context"],
+        outputs=["agent_task_yaml"],
+        recommended_model_tier="optional",
+        prompt_template=dedent(
+            """
+            Create a ResearchInfra agent task spec from this project context:
+
+            $input_text
+
+            Output schema:
+            $output_schema
+
+            The task spec must include:
+            - Context files
+            - Expected outputs
+            - Constraints
+            - Verification commands
+            - Suggested backend
+
+            Do not execute any backend. Do not invent completed work.
             """
         ).strip(),
     ),

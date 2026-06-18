@@ -201,3 +201,102 @@ researchinfra idea generate --workspace /tmp/ri-demo --from-paper paper-...
 Cards are Markdown files with YAML front matter plus sibling YAML metadata
 files. Paper Cards live under `memory/papers/`; Idea Cards live under
 `memory/ideas/`.
+
+## Projects
+
+Create a project from existing artifacts or a manual name:
+
+```bash
+researchinfra project create \
+  --workspace /tmp/ri-demo \
+  --name "Grounded Evaluation Study" \
+  --from-idea idea-... \
+  --from-paper paper-... \
+  --from-reading reading-...
+```
+
+Inspect and link project context:
+
+```bash
+researchinfra project list --workspace /tmp/ri-demo
+researchinfra project show project-grounded-evaluation-study --workspace /tmp/ri-demo
+researchinfra project status project-grounded-evaluation-study --workspace /tmp/ri-demo
+researchinfra project add-paper project-grounded-evaluation-study paper-... --workspace /tmp/ri-demo
+researchinfra project add-reading project-grounded-evaluation-study reading-... --workspace /tmp/ri-demo
+```
+
+Projects live under `projects/<project-slug>/` with `project.yaml`, `README.md`,
+`context/`, `experiments/`, `draft/`, `agents/`, and `reviews/`.
+
+## Experiments
+
+Dry-run the skill-driven experiment prompt or write local planning artifacts:
+
+```bash
+researchinfra experiment plan \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo \
+  --dry-run
+researchinfra experiment plan \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo
+researchinfra experiment list \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo
+```
+
+Planning writes `experiment_plan.md`, `baseline_registry.yaml`,
+`ablation_matrix.yaml`, `run_registry.yaml`, and `claim_evidence.yaml` under the
+project's `experiments/` directory. Add explicit, user-provided run metrics:
+
+```bash
+researchinfra experiment add-run \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo \
+  --experiment experiment-grounded-evaluation-study-001 \
+  --metric accuracy=0.5
+```
+
+ResearchInfra does not invent baselines, datasets, metrics, or results.
+
+## Drafts
+
+Render or write evidence-gated draft scaffolds:
+
+```bash
+researchinfra draft outline \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo \
+  --venue acl \
+  --dry-run
+researchinfra draft section \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo \
+  --section limitations
+```
+
+Draft outputs live under `projects/<project-slug>/draft/` and include warnings
+for missing evidence and missing experiments.
+
+## Agent Tasks
+
+Create task specs for future human-approved backend execution:
+
+```bash
+researchinfra agent task create \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo \
+  --type writing \
+  --title "Draft limitations section"
+researchinfra agent task list \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo
+researchinfra agent task show task-writing-0001 \
+  --project project-grounded-evaluation-study \
+  --workspace /tmp/ri-demo
+```
+
+Task specs live under `projects/<project-slug>/agents/tasks/` and record context
+files, expected outputs, constraints, verification commands, and suggested
+backend. ResearchInfra does not run Codex, Claude Code, OpenHands, or other
+backends from these commands yet.

@@ -35,3 +35,21 @@ are stored in `.researchinfra/sources.yaml`. Generated Paper Cards live under
 `memory/papers/`; generated Idea Cards live under `memory/ideas/`; paper
 reading notes live under `memory/readings/<reading-id>/`. Extracted document
 text and metadata live under `memory/documents/<document-id>/`.
+
+Project directories are self-contained:
+
+```text
+projects/<project-slug>/
+  project.yaml
+  README.md
+  context/
+  experiments/
+  draft/
+  agents/tasks/
+  reviews/
+```
+
+Experiment planning writes `experiment_plan.md`, `baseline_registry.yaml`,
+`ablation_matrix.yaml`, `run_registry.yaml`, and `claim_evidence.yaml` under the
+project. Draft scaffolds live under `draft/`, and agent task specs live under
+`agents/tasks/`.

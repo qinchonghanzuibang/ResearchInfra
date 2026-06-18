@@ -221,13 +221,85 @@ class Project(ResearchInfraModel):
     id: str = Field(..., min_length=1)
     title: str = Field(..., min_length=1)
     description: str | None = None
+    thesis: str | None = None
+    research_question: str | None = None
+    motivation: str | None = None
     status: Literal["planning", "active", "paused", "submitted", "archived"] = "planning"
     ideas: list[str] = Field(default_factory=list)
+    papers: list[str] = Field(default_factory=list)
+    readings: list[str] = Field(default_factory=list)
     claims: list[str] = Field(default_factory=list)
     experiments: list[str] = Field(default_factory=list)
     artifacts: list[str] = Field(default_factory=list)
+    open_questions: list[str] = Field(default_factory=list)
+    decisions: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+    next_actions: list[str] = Field(default_factory=list)
+    target_venue: str | None = None
     owner: str | None = None
     created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+MetricValue = int | float | str | bool | None
+
+
+class Baseline(ResearchInfraModel):
+    """A baseline that an experiment plan should define before execution."""
+
+    id: str = Field(..., min_length=1)
+    name: str = Field(..., min_length=1)
+    description: str | None = None
+    implementation_status: Literal["proposed", "defined", "implemented", "verified"] = "proposed"
+    evidence: list[EvidenceLink] = Field(default_factory=list)
+
+
+class Ablation(ResearchInfraModel):
+    """A planned ablation axis for an experiment matrix."""
+
+    id: str = Field(..., min_length=1)
+    factor: str = Field(..., min_length=1)
+    levels: list[str] = Field(default_factory=list)
+    hypothesis: str | None = None
+    status: Literal["proposed", "ready", "run", "dropped"] = "proposed"
+
+
+class ExperimentPlan(ResearchInfraModel):
+    """A project-level experiment planning artifact."""
+
+    id: str = Field(..., min_length=1)
+    project_id: str = Field(..., min_length=1)
+    title: str = Field(..., min_length=1)
+    question: str | None = None
+    hypothesis: str | None = None
+    baselines: list[Baseline] = Field(default_factory=list)
+    ablations: list[Ablation] = Field(default_factory=list)
+    metrics: list[str] = Field(default_factory=list)
+    datasets: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+    missing_evidence: list[str] = Field(default_factory=list)
+    status: Literal["draft", "ready", "running", "completed", "archived"] = "draft"
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class ResultRecord(ResearchInfraModel):
+    """A file-first result or metric record for a concrete run."""
+
+    id: str = Field(..., min_length=1)
+    experiment_id: str = Field(..., min_length=1)
+    metrics: dict[str, MetricValue] = Field(default_factory=dict)
+    artifacts: list[str] = Field(default_factory=list)
+    notes: str | None = None
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class ClaimEvidenceLink(ResearchInfraModel):
+    """A claim-to-evidence mapping used to gate drafts and results."""
+
+    claim_id: str = Field(..., min_length=1)
+    evidence: list[EvidenceLink] = Field(default_factory=list)
+    status: Literal["missing", "partial", "supported", "contradicted"] = "missing"
+    note: str | None = None
 
 
 class Experiment(ResearchInfraModel):
@@ -244,9 +316,6 @@ class Experiment(ResearchInfraModel):
     expected_artifacts: list[str] = Field(default_factory=list)
     status: Literal["planned", "ready", "running", "completed", "blocked", "abandoned"] = "planned"
     created_at: datetime = Field(default_factory=utc_now)
-
-
-MetricValue = int | float | str | bool | None
 
 
 class Run(ResearchInfraModel):
@@ -305,7 +374,14 @@ class AgentTask(ResearchInfraModel):
 
     id: str = Field(..., min_length=1)
     title: str = Field(..., min_length=1)
+    task_type: Literal["coding", "experiment", "writing", "review", "latex"] | None = None
+    project_id: str | None = None
     backend: str = Field(..., min_length=1)
+    suggested_backend: str | None = None
+    context_files: list[str] = Field(default_factory=list)
+    expected_outputs: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    verification_commands: list[str] = Field(default_factory=list)
     prompt: str | None = None
     status: Literal["queued", "running", "needs_review", "completed", "failed", "cancelled"] = (
         "queued"

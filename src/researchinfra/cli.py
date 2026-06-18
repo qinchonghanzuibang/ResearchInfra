@@ -31,6 +31,17 @@ from researchinfra.readings import ReadingError, ReadingService
 from researchinfra.schemas import ModelProviderConfig
 from researchinfra.skills import READING_MODES, SkillError, SkillNotFoundError, SkillRunner
 from researchinfra.sources import SourceNotFoundError, SourceRegistry
+from researchinfra.workflows import (
+    DRAFT_SECTIONS,
+    TASK_TYPES,
+    VENUES,
+    AgentTaskService,
+    DraftService,
+    ExperimentService,
+    ProjectNotFoundError,
+    ProjectService,
+    WorkflowError,
+)
 from researchinfra.workspace import WorkspaceExistsError, init_workspace
 
 
@@ -221,6 +232,113 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print the rendered idea-card prompt instead of writing a card.",
     )
 
+    project_parser = subparsers.add_parser("project", help="Manage research projects.")
+    project_subparsers = project_parser.add_subparsers(dest="project_command")
+    project_create = project_subparsers.add_parser("create", help="Create a project.")
+    project_create.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    project_create.add_argument("--name", required=True, help="Project name.")
+    project_create.add_argument("--from-idea", help="Idea Card id.")
+    project_create.add_argument("--from-paper", help="Paper Card id.")
+    project_create.add_argument("--from-reading", help="Reading artifact id.")
+
+    project_list = project_subparsers.add_parser("list", help="List projects.")
+    project_list.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+
+    project_show = project_subparsers.add_parser("show", help="Show project YAML.")
+    project_show.add_argument("project_id", help="Project id or slug.")
+    project_show.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+
+    project_status = project_subparsers.add_parser("status", help="Show project status.")
+    project_status.add_argument("project_id", help="Project id or slug.")
+    project_status.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+
+    project_add_paper = project_subparsers.add_parser("add-paper", help="Link a Paper Card.")
+    project_add_paper.add_argument("project_id", help="Project id or slug.")
+    project_add_paper.add_argument("paper_id", help="Paper Card id.")
+    project_add_paper.add_argument(
+        "--workspace", required=True, help="ResearchInfra workspace path."
+    )
+
+    project_add_reading = project_subparsers.add_parser(
+        "add-reading", help="Link a reading artifact."
+    )
+    project_add_reading.add_argument("project_id", help="Project id or slug.")
+    project_add_reading.add_argument("reading_id", help="Reading artifact id.")
+    project_add_reading.add_argument(
+        "--workspace", required=True, help="ResearchInfra workspace path."
+    )
+
+    experiment_parser = subparsers.add_parser(
+        "experiment", help="Plan experiments and record runs."
+    )
+    experiment_subparsers = experiment_parser.add_subparsers(dest="experiment_command")
+    experiment_plan = experiment_subparsers.add_parser("plan", help="Create experiment plan.")
+    experiment_plan.add_argument("--project", required=True, help="Project id or slug.")
+    experiment_plan.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    experiment_plan.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the rendered experiment-plan prompt instead of writing files.",
+    )
+
+    experiment_list = experiment_subparsers.add_parser("list", help="List project experiments.")
+    experiment_list.add_argument("--project", required=True, help="Project id or slug.")
+    experiment_list.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+
+    experiment_run = experiment_subparsers.add_parser("add-run", help="Add a run record.")
+    experiment_run.add_argument("--project", required=True, help="Project id or slug.")
+    experiment_run.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    experiment_run.add_argument("--experiment", required=True, help="Experiment id.")
+    experiment_run.add_argument(
+        "--metric",
+        action="append",
+        default=[],
+        help="Metric as name=value. Repeat for multiple metrics.",
+    )
+
+    draft_parser = subparsers.add_parser("draft", help="Plan evidence-gated drafts.")
+    draft_subparsers = draft_parser.add_subparsers(dest="draft_command")
+    draft_outline = draft_subparsers.add_parser("outline", help="Create a draft outline.")
+    draft_outline.add_argument("--project", required=True, help="Project id or slug.")
+    draft_outline.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    draft_outline.add_argument("--venue", choices=VENUES, help="Target venue.")
+    draft_outline.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the rendered outline prompt instead of writing files.",
+    )
+
+    draft_section = draft_subparsers.add_parser("section", help="Create a section scaffold.")
+    draft_section.add_argument("--project", required=True, help="Project id or slug.")
+    draft_section.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+    draft_section.add_argument("--section", required=True, choices=DRAFT_SECTIONS)
+    draft_section.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the rendered section prompt instead of writing files.",
+    )
+
+    agent_parser = subparsers.add_parser("agent", help="Manage agent task specs.")
+    agent_subparsers = agent_parser.add_subparsers(dest="agent_command")
+    agent_task = agent_subparsers.add_parser("task", help="Manage project agent tasks.")
+    agent_task_subparsers = agent_task.add_subparsers(dest="agent_task_command")
+    agent_task_create = agent_task_subparsers.add_parser("create", help="Create an agent task.")
+    agent_task_create.add_argument("--project", required=True, help="Project id or slug.")
+    agent_task_create.add_argument(
+        "--workspace", required=True, help="ResearchInfra workspace path."
+    )
+    agent_task_create.add_argument("--type", required=True, choices=TASK_TYPES)
+    agent_task_create.add_argument("--title", required=True, help="Task title.")
+
+    agent_task_list = agent_task_subparsers.add_parser("list", help="List agent tasks.")
+    agent_task_list.add_argument("--project", required=True, help="Project id or slug.")
+    agent_task_list.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+
+    agent_task_show = agent_task_subparsers.add_parser("show", help="Show agent task YAML.")
+    agent_task_show.add_argument("task_id", help="Agent task id.")
+    agent_task_show.add_argument("--project", required=True, help="Project id or slug.")
+    agent_task_show.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
+
     return parser
 
 
@@ -266,6 +384,18 @@ def run(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "idea":
         return _run_idea(args)
+
+    if args.command == "project":
+        return _run_project(args)
+
+    if args.command == "experiment":
+        return _run_experiment(args)
+
+    if args.command == "draft":
+        return _run_draft(args)
+
+    if args.command == "agent":
+        return _run_agent(args)
 
     parser.print_help()
     return 0
@@ -595,8 +725,209 @@ def _run_idea(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_project(args: argparse.Namespace) -> int:
+    service = ProjectService(args.workspace)
+    if args.project_command == "create":
+        try:
+            project, path = service.create(
+                name=args.name,
+                from_idea=args.from_idea,
+                from_paper=args.from_paper,
+                from_reading=args.from_reading,
+            )
+        except WorkflowError as exc:
+            return _error(str(exc), code=2)
+        print(f"Created Project: {project.id}")
+        print(f"Path: {path}")
+        print(f"Config: {path / 'project.yaml'}")
+        return 0
+
+    if args.project_command == "list":
+        projects = service.list()
+        if not projects:
+            print("No projects.")
+            return 0
+        for project in projects:
+            print(f"{project.id}\t{project.status}\t{project.title}")
+        return 0
+
+    if args.project_command == "show":
+        try:
+            project = service.get(args.project_id)
+        except ProjectNotFoundError as exc:
+            return _error(str(exc), code=2)
+        print(yaml.safe_dump(project.model_dump(mode="json"), sort_keys=False).strip())
+        return 0
+
+    if args.project_command == "status":
+        try:
+            print(service.status(args.project_id))
+        except ProjectNotFoundError as exc:
+            return _error(str(exc), code=2)
+        return 0
+
+    if args.project_command == "add-paper":
+        try:
+            project = service.add_paper(args.project_id, args.paper_id)
+        except WorkflowError as exc:
+            return _error(str(exc), code=2)
+        print(f"Linked Paper Card: {args.paper_id}")
+        print(f"Project: {project.id}")
+        return 0
+
+    if args.project_command == "add-reading":
+        try:
+            project = service.add_reading(args.project_id, args.reading_id)
+        except WorkflowError as exc:
+            return _error(str(exc), code=2)
+        print(f"Linked Reading: {args.reading_id}")
+        print(f"Project: {project.id}")
+        return 0
+
+    return _error(
+        "project requires a subcommand: create, list, show, status, add-paper, or add-reading",
+        code=2,
+    )
+
+
+def _run_experiment(args: argparse.Namespace) -> int:
+    service = ExperimentService(args.workspace)
+    if args.experiment_command == "plan":
+        try:
+            if args.dry_run:
+                print(service.render_plan_prompt(args.project))
+                return 0
+            paths = service.plan(args.project)
+        except (WorkflowError, SkillNotFoundError) as exc:
+            return _error(str(exc), code=2)
+        print("Created Experiment Plan")
+        for path in paths:
+            print(f"Artifact: {path}")
+        return 0
+
+    if args.experiment_command == "list":
+        try:
+            experiments = service.list(args.project)
+        except WorkflowError as exc:
+            return _error(str(exc), code=2)
+        if not experiments:
+            print("No experiments.")
+            return 0
+        for experiment_id in experiments:
+            print(experiment_id)
+        return 0
+
+    if args.experiment_command == "add-run":
+        try:
+            run_record, path = service.add_run(
+                project_id=args.project,
+                experiment_id=args.experiment,
+                metrics=_parse_metrics(args.metric),
+            )
+        except WorkflowError as exc:
+            return _error(str(exc), code=2)
+        print(f"Added Run: {run_record.id}")
+        print(f"Registry: {path}")
+        return 0
+
+    return _error("experiment requires a subcommand: plan, list, or add-run", code=2)
+
+
+def _run_draft(args: argparse.Namespace) -> int:
+    service = DraftService(args.workspace)
+    if args.draft_command == "outline":
+        try:
+            if args.dry_run:
+                print(service.render_outline_prompt(args.project, venue=args.venue))
+                return 0
+            path = service.outline(args.project, venue=args.venue)
+        except (WorkflowError, SkillNotFoundError) as exc:
+            return _error(str(exc), code=2)
+        print(f"Created Draft Outline: {path}")
+        return 0
+
+    if args.draft_command == "section":
+        try:
+            if args.dry_run:
+                print(service.render_section_prompt(args.project, section=args.section))
+                return 0
+            path = service.section(args.project, section=args.section)
+        except (WorkflowError, SkillNotFoundError) as exc:
+            return _error(str(exc), code=2)
+        print(f"Created Draft Section: {path}")
+        return 0
+
+    return _error("draft requires a subcommand: outline or section", code=2)
+
+
+def _run_agent(args: argparse.Namespace) -> int:
+    if args.agent_command != "task":
+        return _error("agent requires a subcommand: task", code=2)
+    service = AgentTaskService(args.workspace)
+    if args.agent_task_command == "create":
+        try:
+            task, path = service.create(
+                project_id=args.project,
+                task_type=args.type,
+                title=args.title,
+            )
+        except WorkflowError as exc:
+            return _error(str(exc), code=2)
+        print(f"Created Agent Task: {task.id}")
+        print(f"Spec: {path}")
+        return 0
+
+    if args.agent_task_command == "list":
+        try:
+            tasks = service.list(args.project)
+        except WorkflowError as exc:
+            return _error(str(exc), code=2)
+        if not tasks:
+            print("No agent tasks.")
+            return 0
+        for task in tasks:
+            print(f"{task.id}\t{task.task_type or 'unknown'}\t{task.status}\t{task.title}")
+        return 0
+
+    if args.agent_task_command == "show":
+        try:
+            task = service.get(project_id=args.project, task_id=args.task_id)
+        except WorkflowError as exc:
+            return _error(str(exc), code=2)
+        print(yaml.safe_dump(task.model_dump(mode="json"), sort_keys=False).strip())
+        return 0
+
+    return _error("agent task requires a subcommand: create, list, or show", code=2)
+
+
 def _parse_tags(value: str) -> list[str]:
     return [tag.strip() for tag in value.split(",") if tag.strip()]
+
+
+def _parse_metrics(values: list[str]) -> dict[str, object]:
+    metrics: dict[str, object] = {}
+    for value in values:
+        if "=" not in value:
+            raise WorkflowError(f"Metric must use name=value: {value}")
+        name, raw = value.split("=", 1)
+        name = name.strip()
+        if not name:
+            raise WorkflowError(f"Metric name is empty: {value}")
+        metrics[name] = _parse_metric_value(raw.strip())
+    return metrics
+
+
+def _parse_metric_value(value: str) -> object:
+    if value.lower() == "true":
+        return True
+    if value.lower() == "false":
+        return False
+    try:
+        if "." in value:
+            return float(value)
+        return int(value)
+    except ValueError:
+        return value
 
 
 def _error(message: str, *, code: int = 1) -> int:

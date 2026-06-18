@@ -384,3 +384,295 @@ def test_cli_source_extract_document_and_paper_prompt(tmp_path, capsys, monkeypa
         encoding="utf-8"
     )
     assert "No model provider was configured" in notes
+
+
+def test_cli_project_experiment_draft_agent_workflow(tmp_path, capsys, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    workspace = tmp_path / "workspace"
+    assert run(["init", str(workspace)]) == 0
+    capsys.readouterr()
+    source_file = workspace / "sources" / "workflow-paper.md"
+    source_file.parent.mkdir(parents=True, exist_ok=True)
+    source_file.write_text(
+        "# Workflow Paper\n\nEvidence about data quality and evaluation risk.",
+        encoding="utf-8",
+    )
+
+    assert (
+        run(
+            [
+                "source",
+                "add",
+                str(source_file),
+                "--workspace",
+                str(workspace),
+                "--type",
+                "paper",
+                "--title",
+                "Workflow Paper",
+            ]
+        )
+        == 0
+    )
+    add_output = capsys.readouterr().out
+    source_id = next(
+        line.split(": ", 1)[1] for line in add_output.splitlines() if line.startswith("Added")
+    )
+    assert run(["source", "extract", source_id, "--workspace", str(workspace)]) == 0
+    capsys.readouterr()
+
+    assert (
+        run(["paper", "create-card", source_id, "--workspace", str(workspace), "--use-content"])
+        == 0
+    )
+    paper_output = capsys.readouterr().out
+    paper_id = next(
+        line.split(": ", 1)[1]
+        for line in paper_output.splitlines()
+        if line.startswith("Created Paper Card")
+    )
+
+    assert run(["idea", "generate", "--workspace", str(workspace), "--from-paper", paper_id]) == 0
+    idea_output = capsys.readouterr().out
+    idea_id = next(
+        line.split(": ", 1)[1]
+        for line in idea_output.splitlines()
+        if line.startswith("Created Idea Card")
+    )
+
+    assert run(["paper", "read", source_id, "--workspace", str(workspace), "--mode", "idea"]) == 0
+    reading_output = capsys.readouterr().out
+    reading_id = next(
+        line.split(": ", 1)[1]
+        for line in reading_output.splitlines()
+        if line.startswith("Created Reading Notes")
+    )
+
+    assert (
+        run(
+            [
+                "project",
+                "create",
+                "--workspace",
+                str(workspace),
+                "--name",
+                "Grounded Workflow",
+                "--from-idea",
+                idea_id,
+                "--from-paper",
+                paper_id,
+                "--from-reading",
+                reading_id,
+            ]
+        )
+        == 0
+    )
+    project_output = capsys.readouterr().out
+    project_id = next(
+        line.split(": ", 1)[1]
+        for line in project_output.splitlines()
+        if line.startswith("Created Project")
+    )
+    project_slug = project_id.removeprefix("project-")
+    project_dir = workspace / "projects" / project_slug
+    assert (project_dir / "project.yaml").exists()
+    assert (project_dir / "context" / "project_context.md").exists()
+    assert (project_dir / "experiments").exists()
+    assert (project_dir / "draft").exists()
+    assert (project_dir / "agents" / "tasks").exists()
+    assert (project_dir / "reviews").exists()
+
+    assert run(["project", "list", "--workspace", str(workspace)]) == 0
+    assert project_id in capsys.readouterr().out
+
+    assert run(["project", "show", project_id, "--workspace", str(workspace)]) == 0
+    project_yaml = capsys.readouterr().out
+    assert paper_id in project_yaml
+    assert reading_id in project_yaml
+    assert idea_id in project_yaml
+
+    assert run(["project", "status", project_id, "--workspace", str(workspace)]) == 0
+    assert "No experimental results" in (project_dir / "project.yaml").read_text(encoding="utf-8")
+    assert "Next actions" in capsys.readouterr().out
+
+    assert run(["project", "add-paper", project_id, paper_id, "--workspace", str(workspace)]) == 0
+    assert "Linked Paper Card" in capsys.readouterr().out
+
+    assert (
+        run(["project", "add-reading", project_id, reading_id, "--workspace", str(workspace)]) == 0
+    )
+    assert "Linked Reading" in capsys.readouterr().out
+
+    assert (
+        run(
+            [
+                "experiment",
+                "plan",
+                "--project",
+                project_id,
+                "--workspace",
+                str(workspace),
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+    experiment_prompt = capsys.readouterr().out
+    assert "Grounded Workflow" in experiment_prompt
+    assert "Do not present any proposed experiment as already run" in experiment_prompt
+
+    assert run(["experiment", "plan", "--project", project_id, "--workspace", str(workspace)]) == 0
+    capsys.readouterr()
+    assert (project_dir / "experiments" / "experiment_plan.md").exists()
+    assert (project_dir / "experiments" / "baseline_registry.yaml").exists()
+    assert (project_dir / "experiments" / "ablation_matrix.yaml").exists()
+    assert (project_dir / "experiments" / "run_registry.yaml").exists()
+    assert (project_dir / "experiments" / "claim_evidence.yaml").exists()
+
+    assert run(["experiment", "list", "--project", project_id, "--workspace", str(workspace)]) == 0
+    experiment_id = capsys.readouterr().out.strip()
+    assert experiment_id.startswith("experiment-")
+
+    assert (
+        run(
+            [
+                "experiment",
+                "add-run",
+                "--project",
+                project_id,
+                "--workspace",
+                str(workspace),
+                "--experiment",
+                experiment_id,
+                "--metric",
+                "accuracy=0.5",
+            ]
+        )
+        == 0
+    )
+    assert "Added Run" in capsys.readouterr().out
+    assert "accuracy" in (project_dir / "experiments" / "run_registry.yaml").read_text(
+        encoding="utf-8"
+    )
+
+    assert (
+        run(
+            [
+                "draft",
+                "outline",
+                "--project",
+                project_id,
+                "--workspace",
+                str(workspace),
+                "--venue",
+                "acl",
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+    assert "Do not claim results unless linked to run records" in capsys.readouterr().out
+
+    assert (
+        run(
+            [
+                "draft",
+                "outline",
+                "--project",
+                project_id,
+                "--workspace",
+                str(workspace),
+                "--venue",
+                "acl",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+    assert (project_dir / "draft" / "outline.md").exists()
+
+    assert (
+        run(
+            [
+                "draft",
+                "section",
+                "--project",
+                project_id,
+                "--workspace",
+                str(workspace),
+                "--section",
+                "limitations",
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+    assert "missing-experiment warnings" in capsys.readouterr().out
+
+    assert (
+        run(
+            [
+                "draft",
+                "section",
+                "--project",
+                project_id,
+                "--workspace",
+                str(workspace),
+                "--section",
+                "limitations",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+    assert (project_dir / "draft" / "limitations.md").exists()
+
+    assert (
+        run(
+            [
+                "agent",
+                "task",
+                "create",
+                "--project",
+                project_id,
+                "--workspace",
+                str(workspace),
+                "--type",
+                "writing",
+                "--title",
+                "Draft limitations section",
+            ]
+        )
+        == 0
+    )
+    task_output = capsys.readouterr().out
+    task_id = next(
+        line.split(": ", 1)[1]
+        for line in task_output.splitlines()
+        if line.startswith("Created Agent Task")
+    )
+    assert (project_dir / "agents" / "tasks" / f"{task_id}.yaml").exists()
+
+    assert (
+        run(["agent", "task", "list", "--project", project_id, "--workspace", str(workspace)]) == 0
+    )
+    assert task_id in capsys.readouterr().out
+
+    assert (
+        run(
+            [
+                "agent",
+                "task",
+                "show",
+                task_id,
+                "--project",
+                project_id,
+                "--workspace",
+                str(workspace),
+            ]
+        )
+        == 0
+    )
+    task_yaml = capsys.readouterr().out
+    assert "verification_commands" in task_yaml
+    assert "Do not fabricate" in task_yaml

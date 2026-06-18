@@ -7,18 +7,24 @@ The default workspace includes general workflow skill directories:
 
 - `reading`
 - `ideation`
+- `project-planning`
 - `experiment-planning`
 - `writing`
 - `reviewing`
 - `latex`
 - `submission`
+- `agents`
 
 ResearchInfra also ships built-in runnable skills:
 
 - `paper_card`
 - `idea_card`
 - `claim_check`
+- `project_brain`
 - `experiment_plan`
+- `draft_outline`
+- `draft_section`
+- `agent_task`
 - `read_skim`
 - `read_deep`
 - `read_idea`
