@@ -54,6 +54,7 @@ from researchinfra.workspace import (
     init_workspace,
     require_workspace,
 )
+from researchinfra.workspace_files import WorkspaceDataError
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -73,10 +74,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     init_parser.add_argument("workspace", type=_nonempty, help="Directory to initialize.")
     init_parser.add_argument("--name", type=_nonempty, help="Workspace display name.")
-    init_parser.add_argument(
+    init_mode = init_parser.add_mutually_exclusive_group()
+    init_mode.add_argument(
         "--force",
         action="store_true",
-        help="Add missing files even if the target directory already contains files.",
+        help="Add only missing workspace files and directories; never overwrite existing files.",
+    )
+    init_mode.add_argument(
+        "--reinitialize",
+        action="store_true",
+        help="Replace generated configuration and starter files; requires --yes.",
+    )
+    init_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Confirm --reinitialize after reviewing files that will be replaced.",
     )
 
     source_parser = subparsers.add_parser("source", help="Manage workspace research sources.")
@@ -440,6 +452,12 @@ def build_parser() -> argparse.ArgumentParser:
     agent_run.add_argument("--backend", required=True, choices=AGENT_RUN_BACKENDS)
     agent_run.add_argument("--dry-run", action="store_true", help="Print actions without writing.")
     agent_run.add_argument(
+        "--format",
+        choices=("markdown", "yaml"),
+        default="markdown",
+        help="Output format for manual task instructions.",
+    )
+    agent_run.add_argument(
         "--yes",
         action="store_true",
         help="Approve task-declared shell commands.",
@@ -453,6 +471,8 @@ def run(argv: Sequence[str] | None = None) -> int:
 
     try:
         return _run(argv)
+    except WorkspaceDataError as exc:
+        return _error(str(exc), code=2)
     except ValidationError as exc:
         return _error(_validation_error(exc), code=2)
 
@@ -477,12 +497,21 @@ def _run(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "init":
         try:
-            result = init_workspace(args.workspace, name=args.name, force=args.force)
+            result = init_workspace(
+                args.workspace,
+                name=args.name,
+                force=args.force,
+                reinitialize=args.reinitialize,
+                yes=args.yes,
+            )
         except (WorkspaceExistsError, WorkspaceError) as exc:
             return _error(str(exc), code=2)
 
         print(f"Initialized ResearchInfra workspace at {result.path}")
-        print(f"Wrote config: {result.config_path}")
+        if result.config_written:
+            print(f"Wrote config: {result.config_path}")
+        else:
+            print(f"Preserved config: {result.config_path}")
         return 0
 
     if args.command == "source":
@@ -1207,7 +1236,10 @@ def _run_agent(args: argparse.Namespace) -> int:
             )
         except WorkflowError as exc:
             return _error(str(exc), code=2)
-        print(yaml.safe_dump(result, sort_keys=False).strip())
+        if args.backend == "manual" and args.format == "markdown":
+            print(result["instructions"])
+        else:
+            print(yaml.safe_dump(result, sort_keys=False).strip())
         if path:
             print(f"Result: {path}")
         return 0 if result.get("status") not in {"blocked", "missing_backend", "failed"} else 2

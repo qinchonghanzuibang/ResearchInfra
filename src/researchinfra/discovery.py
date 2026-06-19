@@ -11,10 +11,9 @@ from urllib.error import URLError
 from urllib.parse import quote_plus, urlparse
 from urllib.request import urlopen
 
-import yaml
-
 from researchinfra.schemas import Feed, FeedType, InboxItem, InboxStatus, Source, utc_now
 from researchinfra.sources import SourceRegistry
+from researchinfra.workspace_files import read_yaml_mapping, validate_yaml_records, write_yaml
 
 
 class DiscoveryError(RuntimeError):
@@ -41,7 +40,7 @@ class FeedRegistry:
 
     def list(self) -> list[Feed]:
         data = self._read()
-        feeds = [Feed.model_validate(item) for item in data.get("feeds", [])]
+        feeds = validate_yaml_records(data, key="feeds", model_type=Feed, path=self.path)
         return sorted(feeds, key=lambda feed: feed.created_at)
 
     def get(self, feed_id: str) -> Feed:
@@ -105,14 +104,11 @@ class FeedRegistry:
     def _read(self) -> dict[str, object]:
         if not self.path.exists():
             return {"feeds": []}
-        data = yaml.safe_load(self.path.read_text(encoding="utf-8")) or {}
-        if not isinstance(data, dict):
-            raise DiscoveryError(f"Invalid feed registry: {self.path}")
-        return data
+        return read_yaml_mapping(self.path)
 
     def _write(self, feeds: list[Feed]) -> None:
         data = {"feeds": [feed.model_dump(mode="json") for feed in feeds]}
-        self.path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+        write_yaml(self.path, data)
 
 
 class Inbox:
@@ -125,7 +121,7 @@ class Inbox:
 
     def list(self, *, status: InboxStatus | None = None) -> list[InboxItem]:
         data = self._read()
-        items = [InboxItem.model_validate(item) for item in data.get("items", [])]
+        items = validate_yaml_records(data, key="items", model_type=InboxItem, path=self.path)
         if status is not None:
             items = [item for item in items if item.status == status]
         return sorted(items, key=lambda item: item.created_at)
@@ -204,14 +200,11 @@ class Inbox:
     def _read(self) -> dict[str, object]:
         if not self.path.exists():
             return {"items": []}
-        data = yaml.safe_load(self.path.read_text(encoding="utf-8")) or {}
-        if not isinstance(data, dict):
-            raise DiscoveryError(f"Invalid inbox: {self.path}")
-        return data
+        return read_yaml_mapping(self.path)
 
     def _write(self, items: list[InboxItem]) -> None:
         data = {"items": [item.model_dump(mode="json") for item in items]}
-        self.path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+        write_yaml(self.path, data)
 
 
 class FeedSyncer:

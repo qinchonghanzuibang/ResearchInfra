@@ -6,8 +6,6 @@ import re
 from pathlib import Path
 from textwrap import dedent
 
-import yaml
-
 from researchinfra.schemas import (
     EvidenceLink,
     FigureRecord,
@@ -18,6 +16,7 @@ from researchinfra.schemas import (
     TableRecord,
 )
 from researchinfra.workflows import ProjectService, WorkflowError
+from researchinfra.workspace_files import read_yaml_mapping, validate_yaml_records, write_yaml
 
 
 class ResultRegistryError(WorkflowError):
@@ -214,10 +213,7 @@ class ResultRegistry:
         project = self.projects.get(project_id)
         path = self.projects.path_for(project) / "experiments" / "run_registry.yaml"
         data = _read_yaml(path)
-        raw_runs = data.get("runs", []) if isinstance(data, dict) else []
-        if not isinstance(raw_runs, list):
-            raise ResultRegistryError(f"Invalid runs list in {path}")
-        return [Run.model_validate(item) for item in raw_runs if isinstance(item, dict)]
+        return validate_yaml_records(data, key="runs", model_type=Run, path=path)
 
 
 def _render_table_markdown(table: TableRecord) -> str:
@@ -257,17 +253,11 @@ def _render_figure_markdown(figure: FigureRecord) -> str:
 
 
 def _read_yaml(path: Path) -> dict[str, object]:
-    if not path.exists():
-        return {}
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        raise ResultRegistryError(f"Invalid YAML object: {path}")
-    return data
+    return read_yaml_mapping(path)
 
 
 def _write_yaml(path: Path, data: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    write_yaml(path, data)
 
 
 def _slug(value: str) -> str:

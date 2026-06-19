@@ -283,7 +283,30 @@ def test_results_claims_paper_and_agent_loop(tmp_path, capsys, monkeypatch) -> N
         )
         == 0
     )
-    assert "manual_instructions" in capsys.readouterr().out
+    manual_output = capsys.readouterr().out
+    assert "# Manual Agent Task:" in manual_output
+    assert "instructions:" not in manual_output
+
+    assert (
+        run(
+            [
+                "agent",
+                "run",
+                task_id,
+                "--project",
+                project_id,
+                "--workspace",
+                str(workspace),
+                "--backend",
+                "manual",
+                "--dry-run",
+                "--format",
+                "yaml",
+            ]
+        )
+        == 0
+    )
+    assert "instructions:" in capsys.readouterr().out
 
     assert (
         run(

@@ -139,7 +139,9 @@ def test_cli_renders_pydantic_errors_without_traceback(tmp_path, capsys) -> None
     captured = capsys.readouterr()
 
     assert code == 2
-    assert "Invalid title" in captured.err
+    assert str(project_file) in captured.err
+    assert "Malformed YAML/config file" in captured.err
+    assert "restore it from git" in captured.err
     assert "Traceback" not in captured.err
 
 

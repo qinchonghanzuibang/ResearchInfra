@@ -9,10 +9,9 @@ import zipfile
 from pathlib import Path
 from textwrap import dedent
 
-import yaml
-
 from researchinfra.claims import ClaimService
 from researchinfra.workflows import VENUES, ProjectService, WorkflowError
+from researchinfra.workspace_files import read_yaml_mapping, write_yaml
 
 
 class SubmissionError(WorkflowError):
@@ -313,17 +312,11 @@ def _tex_escape(value: str) -> str:
 
 
 def _read_yaml(path: Path) -> dict[str, object]:
-    if not path.exists():
-        return {}
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        raise SubmissionError(f"Invalid YAML object: {path}")
-    return data
+    return read_yaml_mapping(path)
 
 
 def _write_yaml(path: Path, data: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    write_yaml(path, data)
 
 
 def _bullet_list(values: list[str]) -> str:

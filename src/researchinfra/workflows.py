@@ -9,10 +9,14 @@ import subprocess
 from pathlib import Path
 from textwrap import dedent
 
-import yaml
-
 from researchinfra.schemas import AgentTask, Experiment, Project, Run, utc_now
 from researchinfra.skills import SkillRunner
+from researchinfra.workspace_files import (
+    read_yaml_mapping,
+    validate_yaml_model,
+    validate_yaml_records,
+    write_yaml,
+)
 
 
 class WorkflowError(RuntimeError):
@@ -115,7 +119,7 @@ class ProjectService:
         if not self.projects_dir.exists():
             return []
         for path in sorted(self.projects_dir.glob("*/project.yaml")):
-            projects.append(Project.model_validate(_read_yaml(path)))
+            projects.append(validate_yaml_model(Project, _read_yaml(path), path=path))
         return sorted(projects, key=lambda project: project.created_at)
 
     def get(self, project_id: str) -> Project:
@@ -123,7 +127,7 @@ class ProjectService:
 
         direct = self.projects_dir / project_id / "project.yaml"
         if direct.exists():
-            return Project.model_validate(_read_yaml(direct))
+            return validate_yaml_model(Project, _read_yaml(direct), path=direct)
         for project in self.list():
             if project.id == project_id or _slug(project.title) == project_id:
                 return project
@@ -155,7 +159,12 @@ class ProjectService:
         project = self.get(project_id)
         base = self.path_for(project)
         run_registry = _read_yaml(base / "experiments" / "run_registry.yaml")
-        runs = run_registry.get("runs", []) if isinstance(run_registry, dict) else []
+        runs = validate_yaml_records(
+            run_registry,
+            key="runs",
+            model_type=Run,
+            path=base / "experiments" / "run_registry.yaml",
+        )
         return dedent(
             f"""
             Project: {project.id}
@@ -416,7 +425,13 @@ class ExperimentService:
         base = self.projects.path_for(project) / "experiments"
         run_path = base / "run_registry.yaml"
         data = _read_yaml(run_path)
-        runs = list(data.get("runs", [])) if isinstance(data, dict) else []
+        existing_runs = validate_yaml_records(
+            data,
+            key="runs",
+            model_type=Run,
+            path=run_path,
+        )
+        runs = [item.model_dump(mode="json") for item in existing_runs]
         run = Run(
             id=f"run-{len(runs) + 1:04d}",
             experiment_id=experiment_id,
@@ -545,7 +560,7 @@ class AgentTaskService:
         tasks_dir = self.projects.path_for(project) / "agents" / "tasks"
         tasks = []
         for path in sorted(tasks_dir.glob("*.yaml")):
-            tasks.append(AgentTask.model_validate(_read_yaml(path)))
+            tasks.append(validate_yaml_model(AgentTask, _read_yaml(path), path=path))
         return tasks
 
     def get(self, *, project_id: str, task_id: str) -> AgentTask:
@@ -555,7 +570,7 @@ class AgentTaskService:
         path = self.projects.path_for(project) / "agents" / "tasks" / f"{task_id}.yaml"
         if not path.exists():
             raise WorkflowError(f"Agent task not found: {task_id}")
-        return AgentTask.model_validate(_read_yaml(path))
+        return validate_yaml_model(AgentTask, _read_yaml(path), path=path)
 
     def run(
         self,
@@ -927,17 +942,11 @@ def _template_bullet_list(values: list[str]) -> str:
 
 
 def _read_yaml(path: Path) -> dict[str, object]:
-    if not path.exists():
-        return {}
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        raise WorkflowError(f"Invalid YAML object: {path}")
-    return data
+    return read_yaml_mapping(path)
 
 
 def _write_yaml(path: Path, data: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    write_yaml(path, data)
 
 
 def _slug(value: str) -> str:

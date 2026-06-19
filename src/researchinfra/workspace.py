@@ -6,10 +6,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from textwrap import dedent
 
-import yaml
-from pydantic import ValidationError
-
 from researchinfra.schemas import AgentBackendConfig, ModelProviderConfig, WorkspaceConfig
+from researchinfra.workspace_files import (
+    WorkspaceDataError,
+    read_yaml_mapping,
+    validate_yaml_model,
+    write_yaml,
+)
 
 
 class WorkspaceError(RuntimeError):
@@ -93,6 +96,7 @@ class InitializedWorkspace:
     path: Path
     config_path: Path
     config: WorkspaceConfig
+    config_written: bool
 
 
 def default_workspace_config(name: str) -> WorkspaceConfig:
@@ -124,35 +128,62 @@ def default_workspace_config(name: str) -> WorkspaceConfig:
 
 
 def init_workspace(
-    path: str | Path, *, name: str | None = None, force: bool = False
+    path: str | Path,
+    *,
+    name: str | None = None,
+    force: bool = False,
+    reinitialize: bool = False,
+    yes: bool = False,
 ) -> InitializedWorkspace:
     """Create a ResearchInfra workspace directory and starter files."""
 
     workspace_path = Path(path).expanduser().resolve()
-    if workspace_path.exists() and any(workspace_path.iterdir()) and not force:
+    if force and reinitialize:
+        raise WorkspaceError("Use either --force or --reinitialize, not both.")
+    if reinitialize and not yes:
+        raise WorkspaceError(
+            "`--reinitialize` requires `--yes` because it overwrites generated "
+            "configuration and starter files."
+        )
+    if workspace_path.exists() and not workspace_path.is_dir():
+        raise WorkspaceError(f"Workspace path is not a directory: {workspace_path}")
+    if workspace_path.exists() and any(workspace_path.iterdir()) and not (force or reinitialize):
         raise WorkspaceExistsError(
-            f"{workspace_path} already exists and is not empty. Use --force to add missing files."
+            f"{workspace_path} already exists and is not empty. Use --force to add missing "
+            "files, or --reinitialize --yes to reset generated starter files."
         )
 
     workspace_name = (name or workspace_path.name).strip()
     if not workspace_name:
         raise WorkspaceError("Workspace name must not be empty.")
+    config_path = workspace_path / ".researchinfra" / "workspace.yaml"
+    config_exists = config_path.is_file()
+    if config_exists and not reinitialize:
+        config = load_workspace_config(workspace_path)
+    else:
+        config = default_workspace_config(workspace_name)
+
     workspace_path.mkdir(parents=True, exist_ok=True)
 
     for directory in WORKSPACE_DIRECTORIES:
         (workspace_path / directory).mkdir(parents=True, exist_ok=True)
 
-    config = default_workspace_config(workspace_name)
-    config_path = workspace_path / ".researchinfra" / "workspace.yaml"
-    _write_yaml(config_path, config.model_dump(mode="json"))
-    _write_workspace_readme(workspace_path, workspace_name)
-    _write_directory_guides(workspace_path)
-    _write_skills(workspace_path)
-    _write_builtin_skill_files(workspace_path)
-    _write_venue_templates(workspace_path)
-    _write_agent_placeholders(workspace_path)
+    config_written = reinitialize or not config_exists
+    if config_written:
+        _write_yaml(config_path, config.model_dump(mode="json"), overwrite=True)
+    _write_workspace_readme(workspace_path, config.name, overwrite=reinitialize)
+    _write_directory_guides(workspace_path, overwrite=reinitialize)
+    _write_skills(workspace_path, overwrite=reinitialize)
+    _write_builtin_skill_files(workspace_path, overwrite=reinitialize)
+    _write_venue_templates(workspace_path, overwrite=reinitialize)
+    _write_agent_placeholders(workspace_path, overwrite=reinitialize)
 
-    return InitializedWorkspace(path=workspace_path, config_path=config_path, config=config)
+    return InitializedWorkspace(
+        path=workspace_path,
+        config_path=config_path,
+        config=config,
+        config_written=config_written,
+    )
 
 
 def workspace_config_path(path: str | Path) -> Path:
@@ -172,15 +203,11 @@ def load_workspace_config(path: str | Path) -> WorkspaceConfig:
             "Run `researchinfra init <workspace>` first."
         )
     try:
-        data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-    except (OSError, yaml.YAMLError) as exc:
-        raise WorkspaceConfigError(f"Could not read workspace config: {config_path}") from exc
-    if not isinstance(data, dict):
-        raise WorkspaceConfigError(f"Invalid workspace config: {config_path}")
-    try:
-        return WorkspaceConfig.model_validate(data)
-    except ValidationError as exc:
-        raise WorkspaceConfigError(f"Invalid workspace config: {config_path}") from exc
+        return validate_yaml_model(
+            WorkspaceConfig, read_yaml_mapping(config_path), path=config_path
+        )
+    except WorkspaceDataError as exc:
+        raise WorkspaceConfigError(str(exc)) from exc
 
 
 def require_workspace(path: str | Path) -> Path:
@@ -190,17 +217,19 @@ def require_workspace(path: str | Path) -> Path:
     return Path(path).expanduser().resolve()
 
 
-def _write_yaml(path: Path, data: object) -> None:
-    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+def _write_yaml(path: Path, data: object, *, overwrite: bool) -> None:
+    if path.exists() and not overwrite:
+        return
+    write_yaml(path, data, create_parents=False)
 
 
-def _write_file(path: Path, content: str) -> None:
-    if path.exists():
+def _write_file(path: Path, content: str, *, overwrite: bool = False) -> None:
+    if path.exists() and not overwrite:
         return
     path.write_text(dedent(content).strip() + "\n", encoding="utf-8")
 
 
-def _write_workspace_readme(workspace_path: Path, workspace_name: str) -> None:
+def _write_workspace_readme(workspace_path: Path, workspace_name: str, *, overwrite: bool) -> None:
     _write_file(
         workspace_path / "README.md",
         f"""
@@ -222,10 +251,11 @@ def _write_workspace_readme(workspace_path: Path, workspace_name: str) -> None:
         ResearchInfra does not create fake evidence. Link claims and drafts to
         real papers, experiments, figures, tables, and run records as they exist.
         """,
+        overwrite=overwrite,
     )
 
 
-def _write_directory_guides(workspace_path: Path) -> None:
+def _write_directory_guides(workspace_path: Path, *, overwrite: bool) -> None:
     guides = {
         "sources/README.md": "Store papers, BibTeX files, PDFs, and source metadata here.",
         "memory/README.md": "Store Paper Cards, Idea Cards, claims, reviews, and notes here.",
@@ -241,10 +271,14 @@ def _write_directory_guides(workspace_path: Path) -> None:
         "docs/README.md": "Store workspace-local documentation and lab conventions.",
     }
     for relative_path, text in guides.items():
-        _write_file(workspace_path / relative_path, f"# {Path(relative_path).parent}\n\n{text}")
+        _write_file(
+            workspace_path / relative_path,
+            f"# {Path(relative_path).parent}\n\n{text}",
+            overwrite=overwrite,
+        )
 
 
-def _write_skills(workspace_path: Path) -> None:
+def _write_skills(workspace_path: Path, *, overwrite: bool) -> None:
     for skill, description in SKILL_DESCRIPTIONS.items():
         _write_file(
             workspace_path / "skills" / skill / "SKILL.md",
@@ -260,10 +294,11 @@ def _write_skills(workspace_path: Path) -> None:
             - Ask for human review before changing research claims, results, or submissions.
             - Avoid fabricating papers, experiments, metrics, or conclusions.
             """,
+            overwrite=overwrite,
         )
 
 
-def _write_builtin_skill_files(workspace_path: Path) -> None:
+def _write_builtin_skill_files(workspace_path: Path, *, overwrite: bool) -> None:
     from researchinfra.skills import BUILTIN_SKILLS
 
     for skill in BUILTIN_SKILLS.values():
@@ -286,11 +321,12 @@ def _write_builtin_skill_files(workspace_path: Path) -> None:
                 "recommended_model_tier": skill.recommended_model_tier,
                 "prompt_template": f"{skill.name}.md",
             },
+            overwrite=overwrite,
         )
-        _write_file(base / f"{skill.name}.md", skill.prompt_template)
+        _write_file(base / f"{skill.name}.md", skill.prompt_template, overwrite=overwrite)
 
 
-def _write_venue_templates(workspace_path: Path) -> None:
+def _write_venue_templates(workspace_path: Path, *, overwrite: bool) -> None:
     for venue in VENUES:
         venue_name = venue.upper() if venue != "arxiv" else "arXiv"
         base = workspace_path / "templates" / "venues" / venue
@@ -303,6 +339,7 @@ def _write_venue_templates(workspace_path: Path) -> None:
             Keep generated drafts linked to claims, papers, experiments, figures, tables,
             and run records.
             """,
+            overwrite=overwrite,
         )
         _write_file(
             base / "main.tex",
@@ -314,10 +351,11 @@ def _write_venue_templates(workspace_path: Path) -> None:
             \maketitle
             \end{document}
             """,
+            overwrite=overwrite,
         )
 
 
-def _write_agent_placeholders(workspace_path: Path) -> None:
+def _write_agent_placeholders(workspace_path: Path, *, overwrite: bool) -> None:
     for backend in ("manual", "shell", "api", "codex", "claude-code", "openhands", "openclaw"):
         _write_yaml(
             workspace_path / "agents" / "backends" / f"{backend}.yaml",
@@ -328,4 +366,5 @@ def _write_agent_placeholders(workspace_path: Path) -> None:
                 "human_approval_required": True,
                 "notes": "Placeholder configuration. Add local commands or API routing when ready.",
             },
+            overwrite=overwrite,
         )

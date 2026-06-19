@@ -11,7 +11,6 @@ from urllib.error import URLError
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
-import yaml
 from pypdf import PdfReader
 
 from researchinfra.schemas import (
@@ -23,6 +22,7 @@ from researchinfra.schemas import (
     utc_now,
 )
 from researchinfra.sources import SourceRegistry
+from researchinfra.workspace_files import read_yaml_mapping, validate_yaml_model, write_yaml
 
 
 class DocumentError(RuntimeError):
@@ -45,16 +45,24 @@ class DocumentStore:
         if not self.base.exists():
             return []
         for metadata_path in sorted(self.base.glob("*/metadata.yaml")):
-            data = yaml.safe_load(metadata_path.read_text(encoding="utf-8")) or {}
-            documents.append(Document.model_validate(data))
+            documents.append(
+                validate_yaml_model(
+                    Document,
+                    read_yaml_mapping(metadata_path),
+                    path=metadata_path,
+                )
+            )
         return sorted(documents, key=lambda document: document.created_at)
 
     def get(self, document_id: str) -> Document:
         metadata_path = self.base / document_id / "metadata.yaml"
         if not metadata_path.exists():
             raise DocumentNotFoundError(f"Document not found: {document_id}")
-        data = yaml.safe_load(metadata_path.read_text(encoding="utf-8")) or {}
-        return Document.model_validate(data)
+        return validate_yaml_model(
+            Document,
+            read_yaml_mapping(metadata_path),
+            path=metadata_path,
+        )
 
     def find_by_source_id(self, source_id: str) -> Document | None:
         for document in self.list():
@@ -76,11 +84,8 @@ class DocumentStore:
         metadata["text_path"] = _relative(text_path, self.workspace)
         metadata["metadata_path"] = _relative(metadata_path, self.workspace)
         text_path.write_text(text, encoding="utf-8")
-        document = Document.model_validate(metadata)
-        metadata_path.write_text(
-            yaml.safe_dump(document.model_dump(mode="json"), sort_keys=False),
-            encoding="utf-8",
-        )
+        document = validate_yaml_model(Document, metadata, path=metadata_path)
+        write_yaml(metadata_path, document.model_dump(mode="json"))
         return document
 
 

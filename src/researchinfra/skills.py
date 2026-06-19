@@ -13,6 +13,7 @@ import yaml
 from researchinfra.documents import DocumentStore, evidence_prompt_context
 from researchinfra.schemas import Document, Skill, Source
 from researchinfra.sources import SourceNotFoundError, SourceRegistry
+from researchinfra.workspace_files import read_yaml_mapping, validate_yaml_model
 
 
 class SkillError(RuntimeError):
@@ -712,9 +713,7 @@ def _skill_component(value: str, *, label: str) -> str:
 
 
 def _load_skill_file(path: Path, skills_dir: Path) -> Skill | None:
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        return None
+    data = read_yaml_mapping(path)
     category = str(data.get("category") or path.parent.name)
     name = str(data.get("name") or (path.parent.name if path.name == "skill.yaml" else path.stem))
     prompt_value = str(data.get("prompt_template") or data.get("prompt") or "prompt.md")
@@ -724,26 +723,30 @@ def _load_skill_file(path: Path, skills_dir: Path) -> Skill | None:
     )
     if not prompt_template.strip():
         return None
-    return Skill(
-        name=name,
-        category=category,
-        description=str(data.get("description", "Workspace skill.")),
-        input_type=str(data.get("input_type", "text")),
-        output_type=str(data.get("output_type", "markdown")),
-        required_context=list(data.get("required_context", [])),
-        recommended_model=str(
-            data.get("recommended_model", data.get("recommended_model_tier", "optional"))
-        ),
-        version=str(data.get("version", "0.1")),
-        author=data.get("author"),
-        tags=list(data.get("tags", [])),
-        inputs=list(data.get("inputs", [])),
-        outputs=list(data.get("outputs", [])),
-        recommended_model_tier=str(
-            data.get("recommended_model_tier", data.get("recommended_model", "optional"))
-        ),
-        prompt_template=prompt_template,
-        origin="workspace" if path.is_relative_to(skills_dir) else "built-in",
+    return validate_yaml_model(
+        Skill,
+        {
+            "name": name,
+            "category": category,
+            "description": str(data.get("description", "Workspace skill.")),
+            "input_type": str(data.get("input_type", "text")),
+            "output_type": str(data.get("output_type", "markdown")),
+            "required_context": data.get("required_context", []),
+            "recommended_model": str(
+                data.get("recommended_model", data.get("recommended_model_tier", "optional"))
+            ),
+            "version": str(data.get("version", "0.1")),
+            "author": data.get("author"),
+            "tags": data.get("tags", []),
+            "inputs": data.get("inputs", []),
+            "outputs": data.get("outputs", []),
+            "recommended_model_tier": str(
+                data.get("recommended_model_tier", data.get("recommended_model", "optional"))
+            ),
+            "prompt_template": prompt_template,
+            "origin": "workspace" if path.is_relative_to(skills_dir) else "built-in",
+        },
+        path=path,
     )
 
 

@@ -6,10 +6,14 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-import yaml
-
-from researchinfra.schemas import Claim, EvidenceLink, utc_now
+from researchinfra.schemas import Claim, EvidenceLink, Run, utc_now
 from researchinfra.workflows import ProjectService, WorkflowError
+from researchinfra.workspace_files import (
+    read_yaml_mapping,
+    validate_yaml_model,
+    validate_yaml_records,
+    write_yaml,
+)
 
 
 class ClaimCheckError(WorkflowError):
@@ -191,19 +195,16 @@ class ClaimService:
     def _resolve_claim(self, claim_ref: str) -> str:
         path = self.workspace / "memory" / "claims" / f"{claim_ref}.yaml"
         if path.exists():
-            return Claim.model_validate(_read_yaml(path)).text
+            return validate_yaml_model(Claim, _read_yaml(path), path=path).text
         return claim_ref
 
     def _run_ids(self, project_id: str) -> set[str]:
         project = self.projects.get(project_id)
         base = self.projects.path_for(project)
         data = _read_yaml(base / "experiments" / "run_registry.yaml")
-        raw_runs = data.get("runs", []) if isinstance(data, dict) else []
-        return {
-            str(item["id"])
-            for item in raw_runs
-            if isinstance(item, dict) and isinstance(item.get("id"), str)
-        }
+        run_path = base / "experiments" / "run_registry.yaml"
+        runs = validate_yaml_records(data, key="runs", model_type=Run, path=run_path)
+        return {run.id for run in runs}
 
     def _registry_items(self, path: Path, key: str) -> list[object]:
         data = _read_yaml(path)
@@ -281,17 +282,11 @@ def _evidence_payload(
 
 
 def _read_yaml(path: Path) -> dict[str, object]:
-    if not path.exists():
-        return {}
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        raise ClaimCheckError(f"Invalid YAML object: {path}")
-    return data
+    return read_yaml_mapping(path)
 
 
 def _write_yaml(path: Path, data: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    write_yaml(path, data)
 
 
 def _indented_bullets(values: list[str]) -> str:

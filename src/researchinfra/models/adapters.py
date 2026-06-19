@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -13,6 +14,20 @@ from researchinfra.models.base import (
     ModelProviderConfigurationError,
     ModelProviderRequestError,
     ModelProviderResult,
+)
+
+_SECRET_ENVIRONMENT_VARIABLES = (
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "OPENROUTER_API_KEY",
+)
+_SENSITIVE_VALUE_PATTERNS = (
+    re.compile(r"(?i)(authorization\s*:\s*bearer\s+)([^\s,;\"'}]+)"),
+    re.compile(r"(?i)(\bbearer\s+)([^\s,;\"'}]+)"),
+    re.compile(
+        r"(?i)([\"']?(?:api[_-]?key|token|access[_-]?token|secret|authorization)"
+        r"[\"']?\s*[:=]\s*[\"']?)([^\s,}\]\"']+)"
+    ),
 )
 
 
@@ -52,7 +67,7 @@ class OpenAICompatibleProvider(PlaceholderModelProvider):
         return {
             "configured": self.is_configured(),
             "provider": "openai-compatible",
-            "base_url": base_url or "https://api.openai.com/v1",
+            "base_url": redact_sensitive_text(base_url or "https://api.openai.com/v1"),
             "model": model or "(OPENAI_MODEL not set)",
             "api_key": "set" if self.is_configured() else "missing",
         }
@@ -90,13 +105,19 @@ class OpenAICompatibleProvider(PlaceholderModelProvider):
             with urlopen(request, timeout=60) as response:  # noqa: S310
                 data = json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
             raise ModelProviderRequestError(
-                f"OpenAI-compatible API request failed with HTTP {exc.code}: {detail}"
+                f"OpenAI-compatible API request failed with HTTP {exc.code}. "
+                "Check the endpoint, credentials, and request configuration."
             ) from exc
         except URLError as exc:
             raise ModelProviderRequestError(
-                f"OpenAI-compatible API request failed: {exc.reason}"
+                "OpenAI-compatible API request failed due to a network error. "
+                "Check the endpoint and network configuration."
+            ) from exc
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise ModelProviderRequestError(
+                "OpenAI-compatible API returned an invalid response. "
+                "Check the endpoint and response format."
             ) from exc
 
         text = _extract_chat_text(data)
@@ -136,3 +157,16 @@ def _extract_chat_text(data: dict[str, Any]) -> str | None:
         return content if isinstance(content, str) else None
     text = first.get("text")
     return text if isinstance(text, str) else None
+
+
+def redact_sensitive_text(value: str) -> str:
+    """Redact secrets before a provider value is exposed to a caller or CLI."""
+
+    redacted = value
+    for environment_name in _SECRET_ENVIRONMENT_VARIABLES:
+        secret = os.environ.get(environment_name)
+        if secret:
+            redacted = redacted.replace(secret, "[REDACTED]")
+    for pattern in _SENSITIVE_VALUE_PATTERNS:
+        redacted = pattern.sub(r"\1[REDACTED]", redacted)
+    return redacted

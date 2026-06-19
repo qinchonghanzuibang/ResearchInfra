@@ -6,9 +6,10 @@ import os
 from pathlib import Path
 from typing import Any
 
-from researchinfra.models.adapters import OpenAICompatibleProvider
+from researchinfra.models.adapters import OpenAICompatibleProvider, redact_sensitive_text
 from researchinfra.schemas import ModelProviderConfig, ProviderKind, WorkspaceConfig
 from researchinfra.workspace import WorkspaceError, load_workspace_config
+from researchinfra.workspace_files import write_yaml
 
 
 class ModelRegistryError(RuntimeError):
@@ -118,12 +119,7 @@ class ModelRegistry:
             raise ModelRegistryError(str(exc)) from exc
 
     def _write(self, config: WorkspaceConfig) -> None:
-        import yaml
-
-        self.config_path.write_text(
-            yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False),
-            encoding="utf-8",
-        )
+        write_yaml(self.config_path, config.model_dump(mode="json"))
 
     def _select_execution_provider(
         self, config: WorkspaceConfig, *, task: str | None
@@ -154,7 +150,7 @@ class ModelRegistry:
             "provider": provider.provider,
             "enabled": provider.enabled,
             "model": provider.model or "",
-            "base_url": provider.base_url or "",
+            "base_url": redact_sensitive_text(provider.base_url or ""),
             "environment": sorted(provider.environment),
             "parameters": sorted(provider.parameters),
         }

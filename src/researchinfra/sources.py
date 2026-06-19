@@ -7,8 +7,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
-import yaml
-
 from researchinfra.schemas import (
     Source,
     SourceLocalMetadata,
@@ -16,6 +14,7 @@ from researchinfra.schemas import (
     SourceUrlMetadata,
     utc_now,
 )
+from researchinfra.workspace_files import read_yaml_mapping, validate_yaml_records, write_yaml
 
 
 class SourceRegistryError(RuntimeError):
@@ -37,7 +36,12 @@ class SourceRegistry:
         """Return all source records sorted by creation time."""
 
         data = self._read()
-        sources = [Source.model_validate(item) for item in data.get("sources", [])]
+        sources = validate_yaml_records(
+            data,
+            key="sources",
+            model_type=Source,
+            path=self.registry_path,
+        )
         return sorted(sources, key=lambda source: source.created_at)
 
     def get(self, source_id: str) -> Source:
@@ -213,14 +217,11 @@ class SourceRegistry:
     def _read(self) -> dict[str, object]:
         if not self.registry_path.exists():
             return {"sources": []}
-        data = yaml.safe_load(self.registry_path.read_text(encoding="utf-8")) or {}
-        if not isinstance(data, dict):
-            raise SourceRegistryError(f"Invalid source registry: {self.registry_path}")
-        return data
+        return read_yaml_mapping(self.registry_path)
 
     def _write(self, sources: list[Source]) -> None:
         data = {"sources": [source.model_dump(mode="json") for source in sources]}
-        self.registry_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+        write_yaml(self.registry_path, data)
 
     def _normalize_target(self, target: str) -> str:
         if _is_url(target):
