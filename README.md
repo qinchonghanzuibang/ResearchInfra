@@ -184,6 +184,24 @@ Every workspace command validates `.researchinfra/workspace.yaml` before it
 reads or writes research state. Run `researchinfra init <workspace>` first; a
 typoed workspace path will fail rather than create a partial workspace.
 
+### First No-API-Key Walkthrough
+
+To inspect a complete evidence-first workspace without configuring a model,
+copy the checked-in demo and run its local checks:
+
+```bash
+WORKSPACE="$(mktemp -d)/researchinfra-v1-loop"
+cp -R examples/v1-loop "$WORKSPACE"
+researchinfra result summarize --project project-evidence-loop --workspace "$WORKSPACE"
+researchinfra claim check --project project-evidence-loop --workspace "$WORKSPACE" --dry-run
+researchinfra paper check --project project-evidence-loop --workspace "$WORKSPACE" --venue arxiv
+researchinfra agent run task-writing-0001 --project project-evidence-loop \
+  --workspace "$WORKSPACE" --backend manual --dry-run
+```
+
+The demo records a smoke-check workflow artifact, not a scientific result. See
+[examples/v1-loop](examples/v1-loop) for the complete source-to-agent sequence.
+
 ## Architecture
 
 ResearchInfra separates durable research state from execution.
@@ -213,7 +231,7 @@ See [docs/architecture.md](docs/architecture.md) for the longer design.
 - [examples/v1-loop](examples/v1-loop) shows the complete dry-run v1 loop from
   source notes through claim checks, paper checks, and an agent task result.
 
-Both examples are intentionally evidence-light. They show structure, not fake
+All examples are intentionally evidence-light. They show structure, not fake
 scientific results.
 
 ## Development

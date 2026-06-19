@@ -7,6 +7,12 @@ layout changes explicit.
 
 ## 0.1.0 - Unreleased
 
+- Redact provider failure details so upstream responses cannot echo credentials
+  into CLI errors.
+- Make `init --force` additive, preserve existing workspace configuration, and
+  require `--reinitialize --yes` for explicit starter-file resets.
+- Report malformed workspace YAML with file paths and repair guidance instead
+  of Python tracebacks.
 - Harden public-alpha release behavior: validate workspaces before command
   execution, reject empty/path-like CLI inputs, and render validation failures
   without tracebacks.

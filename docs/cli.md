@@ -17,11 +17,16 @@ researchinfra init my-research
 Options:
 
 - `--name <name>` sets the workspace display name.
-- `--force` adds missing starter files even if the directory already contains
+- `--force` adds only missing starter files and directories. It preserves the
+  existing workspace config, model defaults, backend config, and user-edited
   files.
+- `--reinitialize --yes` explicitly replaces generated configuration and
+  starter files while retaining research artifacts. Use it only after reviewing
+  the files that will be reset.
 
 The command writes `.researchinfra/workspace.yaml`, starter directory guides,
-skill placeholders, venue template placeholders, and agent backend placeholders.
+skill placeholders, venue template placeholders, and agent backend placeholders
+when they are missing.
 
 ## Sources
 
@@ -409,7 +414,8 @@ researchinfra agent run task-writing-0001 \
 
 Task specs live under `projects/<project-slug>/agents/tasks/` and record context
 files, expected outputs, constraints, verification commands, and suggested
-backend. Manual runs print instructions and non-dry runs write
+backend. Manual runs print readable Markdown instructions by default; pass
+`--format yaml` when machine-readable output is needed. Non-dry runs write
 `agents/results/<task-id>-manual.yaml`. The shell backend can run only
 `safe_commands` already present in the task spec, and only with `--yes`.
 Codex, Claude Code, and OpenHands wrappers report setup/configuration guidance

@@ -20,3 +20,7 @@ conduct concern and asks for maintainer review. For sensitive concerns, open a
 minimal GitHub Issue requesting a private contact channel without including
 personal or incident details. Maintainers should acknowledge the request and
 move the discussion to a private channel as soon as practical.
+
+Maintainers should publish a durable private reporting channel before inviting
+broader community participation. Public issues should contain only the request
+for contact, never incident details.

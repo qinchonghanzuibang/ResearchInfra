@@ -14,6 +14,10 @@ maintainers for a private contact channel, without disclosing vulnerability
 details. Include a clear description, affected versions or commits,
 reproduction steps, and known mitigations once a private channel is arranged.
 
+Before a broader public release, maintainers should enable GitHub private
+vulnerability reporting or publish a durable private reporting address. Until
+then, public issues must contain only a request for a private channel.
+
 ## Secrets
 
 Do not commit API keys, tokens, passwords, private datasets, or confidential

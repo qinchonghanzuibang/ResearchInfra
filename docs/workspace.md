@@ -69,3 +69,15 @@ Tables live under `tables/`; figure registry placeholders live under
 `claims/claim_evidence.yaml`. Paper commands write venue-local LaTeX files under
 `paper/<venue>/` and package outputs under `submissions/<venue>/<phase>/`.
 Agent executions write status records under `agents/results/`.
+
+## Repairing Editable YAML
+
+Workspace YAML is intended to be edited and versioned by researchers. If a
+registry or config file is malformed, ResearchInfra exits without writing new
+state and reports the file path. Fix the YAML syntax, restore the file from git,
+or move it aside before rerunning the command.
+
+Use `researchinfra init <workspace> --force` to restore only missing starter
+files. It does not overwrite existing config or user files. Use
+`researchinfra init <workspace> --reinitialize --yes` only when you explicitly
+want to replace generated configuration and starter files.

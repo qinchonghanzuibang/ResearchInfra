@@ -43,7 +43,8 @@ researchinfra agent run task-writing-0001 \
   --dry-run
 ```
 
-Manual runs print instructions and, without `--dry-run`, write a result file
+Manual runs print readable Markdown instructions by default; use `--format yaml`
+when another tool needs YAML output. Without `--dry-run`, they write a result file
 under `projects/<project-slug>/agents/results/`. The shell backend can run only
 commands already declared in `AgentTask.safe_commands`, and only after `--yes`.
 Codex, Claude Code, and OpenHands wrappers report missing installation or
