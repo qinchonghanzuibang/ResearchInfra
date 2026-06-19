@@ -198,6 +198,7 @@ def test_force_only_adds_missing_files_and_reinitialize_requires_confirmation(
         (".researchinfra/sources.yaml", ["source", "list"]),
         (".researchinfra/feeds.yaml", ["feed", "list"]),
         (".researchinfra/inbox.yaml", ["inbox", "list"]),
+        ("memory/documents/doc-corrupt/metadata.yaml", ["document", "list"]),
         ("skills/reading/read_skim.yaml", ["skill", "list"]),
     ],
 )
