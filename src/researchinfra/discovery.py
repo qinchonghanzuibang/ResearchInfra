@@ -59,6 +59,9 @@ class FeedRegistry:
         query: str | None = None,
         tags: list[str] | None = None,
     ) -> Feed:
+        name = name.strip()
+        if not name:
+            raise DiscoveryError("Feed name must not be empty.")
         if feed_type == "arxiv" and not query:
             raise DiscoveryError("arxiv feeds require --query")
         if feed_type in {"rss", "atom", "web"} and not url:

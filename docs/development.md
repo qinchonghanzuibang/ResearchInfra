@@ -17,6 +17,7 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 researchinfra --help
+python -m researchinfra --help
 python -m pytest
 ```
 
@@ -63,6 +64,7 @@ You can run commands directly:
 python -m pytest
 python -m ruff check .
 python -m ruff format .
+python -m build
 ```
 
 Or use the Makefile:
@@ -91,6 +93,7 @@ Smoke-test the CLI and workspace initializer:
 
 ```bash
 researchinfra --help
+python -m researchinfra --help
 researchinfra init /tmp/researchinfra-smoke
 ```
 
@@ -120,7 +123,7 @@ If `researchinfra` is not found after installation, confirm that your virtual
 environment is active or run the command through the interpreter:
 
 ```bash
-python -m researchinfra.cli --help
+python -m researchinfra --help
 ```
 
 If build isolation tries to download packages in a restricted environment, use a

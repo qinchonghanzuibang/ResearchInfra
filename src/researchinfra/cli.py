@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from collections.abc import Sequence
 
 import yaml
+from pydantic import ValidationError
 
 from researchinfra import __version__
 from researchinfra.cards import CardError, IdeaCardService, PaperCardService
@@ -27,13 +29,12 @@ from researchinfra.documents import (
     DocumentStore,
 )
 from researchinfra.model_registry import MODEL_TASKS, ModelRegistry, ModelRegistryError
-from researchinfra.models.adapters import OpenAICompatibleProvider
 from researchinfra.models.base import ModelProviderConfigurationError, ModelProviderRequestError
+from researchinfra.models.dispatcher import ModelDispatcher, task_for_skill_category
 from researchinfra.readings import ReadingError, ReadingService
 from researchinfra.results import ResultRegistry
-from researchinfra.schemas import ModelProviderConfig
 from researchinfra.skills import READING_MODES, SkillError, SkillNotFoundError, SkillRunner
-from researchinfra.sources import SourceNotFoundError, SourceRegistry
+from researchinfra.sources import SourceNotFoundError, SourceRegistry, SourceRegistryError
 from researchinfra.submission import SubmissionService
 from researchinfra.workflows import (
     AGENT_RUN_BACKENDS,
@@ -47,7 +48,12 @@ from researchinfra.workflows import (
     ProjectService,
     WorkflowError,
 )
-from researchinfra.workspace import WorkspaceExistsError, init_workspace
+from researchinfra.workspace import (
+    WorkspaceError,
+    WorkspaceExistsError,
+    init_workspace,
+    require_workspace,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -65,8 +71,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Create a local ResearchInfra workspace.",
         description="Create a file-first ResearchInfra workspace.",
     )
-    init_parser.add_argument("workspace", help="Directory to initialize.")
-    init_parser.add_argument("--name", help="Workspace display name.")
+    init_parser.add_argument("workspace", type=_nonempty, help="Directory to initialize.")
+    init_parser.add_argument("--name", type=_nonempty, help="Workspace display name.")
     init_parser.add_argument(
         "--force",
         action="store_true",
@@ -74,9 +80,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     source_parser = subparsers.add_parser("source", help="Manage workspace research sources.")
-    source_subparsers = source_parser.add_subparsers(dest="source_command")
+    source_subparsers = source_parser.add_subparsers(dest="source_command", required=True)
     source_add = source_subparsers.add_parser("add", help="Add a local file or URL source.")
-    source_add.add_argument("target", help="Local path or URL to register.")
+    source_add.add_argument("target", type=_nonempty, help="Local path or URL to register.")
     source_add.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
     source_add.add_argument(
         "--type",
@@ -112,7 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     document_parser = subparsers.add_parser("document", help="Inspect extracted documents.")
-    document_subparsers = document_parser.add_subparsers(dest="document_command")
+    document_subparsers = document_parser.add_subparsers(dest="document_command", required=True)
     document_list = document_subparsers.add_parser("list", help="List extracted documents.")
     document_list.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
 
@@ -127,13 +133,13 @@ def build_parser() -> argparse.ArgumentParser:
     document_chunks.add_argument("--limit", type=int, default=10, help="Maximum chunks to print.")
 
     feed_parser = subparsers.add_parser("feed", help="Manage discovery feeds.")
-    feed_subparsers = feed_parser.add_subparsers(dest="feed_command")
+    feed_subparsers = feed_parser.add_subparsers(dest="feed_command", required=True)
     feed_add = feed_subparsers.add_parser("add", help="Add a discovery feed.")
     feed_add.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
     feed_add.add_argument("--type", required=True, choices=["arxiv", "rss", "atom", "web"])
-    feed_add.add_argument("--name", required=True, help="Feed name.")
-    feed_add.add_argument("--query", help="arXiv query.")
-    feed_add.add_argument("--url", help="RSS, Atom, or web URL.")
+    feed_add.add_argument("--name", required=True, type=_nonempty, help="Feed name.")
+    feed_add.add_argument("--query", type=_nonempty, help="arXiv query.")
+    feed_add.add_argument("--url", type=_nonempty, help="RSS, Atom, or web URL.")
     feed_add.add_argument("--tags", default="", help="Comma-separated tags.")
 
     feed_list = feed_subparsers.add_parser("list", help="List discovery feeds.")
@@ -145,7 +151,7 @@ def build_parser() -> argparse.ArgumentParser:
     feed_sync.add_argument("--limit", type=int, default=20, help="Maximum items per feed.")
 
     inbox_parser = subparsers.add_parser("inbox", help="Review discovered source candidates.")
-    inbox_subparsers = inbox_parser.add_subparsers(dest="inbox_command")
+    inbox_subparsers = inbox_parser.add_subparsers(dest="inbox_command", required=True)
     inbox_list = inbox_subparsers.add_parser("list", help="List inbox items.")
     inbox_list.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
     inbox_list.add_argument("--status", choices=["new", "saved", "skipped"], help="Filter status.")
@@ -163,7 +169,7 @@ def build_parser() -> argparse.ArgumentParser:
     inbox_skip.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
 
     skill_parser = subparsers.add_parser("skill", help="List and run reusable skills.")
-    skill_subparsers = skill_parser.add_subparsers(dest="skill_command")
+    skill_subparsers = skill_parser.add_subparsers(dest="skill_command", required=True)
     skill_list = skill_subparsers.add_parser("list", help="List available skills.")
     skill_list.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
     skill_list.add_argument("--category", help="Optional category filter, such as reading.")
@@ -173,11 +179,12 @@ def build_parser() -> argparse.ArgumentParser:
     skill_show.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
 
     skill_create = skill_subparsers.add_parser("create", help="Create a workspace skill.")
-    skill_create.add_argument("skill_name", help="Skill name.")
+    skill_create.add_argument("skill_name", type=_skill_component, help="Skill name.")
     skill_create.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
     skill_create.add_argument(
         "--category",
         default="general",
+        type=_skill_component,
         help="Skill category directory, such as reading, writing, or reviewing.",
     )
 
@@ -193,8 +200,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     model_parser = subparsers.add_parser("model", help="Inspect model provider configuration.")
-    model_subparsers = model_parser.add_subparsers(dest="model_command")
-    model_subparsers.add_parser("check", help="Check OpenAI-compatible provider configuration.")
+    model_subparsers = model_parser.add_subparsers(dest="model_command", required=True)
+    model_check = model_subparsers.add_parser("check", help="Check the default model provider.")
+    model_check.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
     model_list = model_subparsers.add_parser("list", help="List workspace model providers.")
     model_list.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
     model_default = model_subparsers.add_parser(
@@ -202,14 +210,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     model_default.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
     model_default.add_argument("--task", required=True, choices=MODEL_TASKS)
-    model_default.add_argument("--provider", required=True, help="Provider id or kind.")
-    model_default.add_argument("--model", required=True, help="Model name.")
+    model_default.add_argument(
+        "--provider", required=True, type=_nonempty, help="Provider id or kind."
+    )
+    model_default.add_argument("--model", required=True, type=_nonempty, help="Model name.")
     model_test = model_subparsers.add_parser("test", help="Check provider readiness.")
     model_test.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
     model_test.add_argument("--task", choices=MODEL_TASKS)
 
     paper_parser = subparsers.add_parser("paper", help="Create and inspect paper artifacts.")
-    paper_subparsers = paper_parser.add_subparsers(dest="paper_command")
+    paper_subparsers = paper_parser.add_subparsers(dest="paper_command", required=True)
     paper_card = paper_subparsers.add_parser("create-card", help="Create a Paper Card.")
     paper_card.add_argument("source_id", help="Source id to use.")
     paper_card.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
@@ -266,7 +276,7 @@ def build_parser() -> argparse.ArgumentParser:
     paper_phase.add_argument("--arxiv", action="store_true", help="Package arXiv files.")
 
     idea_parser = subparsers.add_parser("idea", help="Generate research idea artifacts.")
-    idea_subparsers = idea_parser.add_subparsers(dest="idea_command")
+    idea_subparsers = idea_parser.add_subparsers(dest="idea_command", required=True)
     idea_generate = idea_subparsers.add_parser("generate", help="Generate an Idea Card.")
     idea_generate.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
     idea_generate.add_argument("--from-paper", required=True, help="Paper Card id.")
@@ -277,10 +287,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     project_parser = subparsers.add_parser("project", help="Manage research projects.")
-    project_subparsers = project_parser.add_subparsers(dest="project_command")
+    project_subparsers = project_parser.add_subparsers(dest="project_command", required=True)
     project_create = project_subparsers.add_parser("create", help="Create a project.")
     project_create.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
-    project_create.add_argument("--name", required=True, help="Project name.")
+    project_create.add_argument("--name", required=True, type=_nonempty, help="Project name.")
     project_create.add_argument("--from-idea", help="Idea Card id.")
     project_create.add_argument("--from-paper", help="Paper Card id.")
     project_create.add_argument("--from-reading", help="Reading artifact id.")
@@ -315,7 +325,9 @@ def build_parser() -> argparse.ArgumentParser:
     experiment_parser = subparsers.add_parser(
         "experiment", help="Plan experiments and record runs."
     )
-    experiment_subparsers = experiment_parser.add_subparsers(dest="experiment_command")
+    experiment_subparsers = experiment_parser.add_subparsers(
+        dest="experiment_command", required=True
+    )
     experiment_plan = experiment_subparsers.add_parser("plan", help="Create experiment plan.")
     experiment_plan.add_argument("--project", required=True, help="Project id or slug.")
     experiment_plan.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
@@ -341,7 +353,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     result_parser = subparsers.add_parser("result", help="Inspect project results.")
-    result_subparsers = result_parser.add_subparsers(dest="result_command")
+    result_subparsers = result_parser.add_subparsers(dest="result_command", required=True)
     result_list = result_subparsers.add_parser("list", help="List run-grounded results.")
     result_list.add_argument("--project", required=True, help="Project id or slug.")
     result_list.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
@@ -350,7 +362,7 @@ def build_parser() -> argparse.ArgumentParser:
     result_summary.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
 
     table_parser = subparsers.add_parser("table", help="Create project tables.")
-    table_subparsers = table_parser.add_subparsers(dest="table_command")
+    table_subparsers = table_parser.add_subparsers(dest="table_command", required=True)
     table_create = table_subparsers.add_parser("create", help="Create a table.")
     table_create.add_argument("--project", required=True, help="Project id or slug.")
     table_create.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
@@ -361,14 +373,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     figure_parser = subparsers.add_parser("figure", help="Create project figure records.")
-    figure_subparsers = figure_parser.add_subparsers(dest="figure_command")
+    figure_subparsers = figure_parser.add_subparsers(dest="figure_command", required=True)
     figure_create = figure_subparsers.add_parser("create", help="Create a figure record.")
     figure_create.add_argument("--project", required=True, help="Project id or slug.")
     figure_create.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
-    figure_create.add_argument("--title", required=True, help="Figure title.")
+    figure_create.add_argument("--title", required=True, type=_nonempty, help="Figure title.")
 
     claim_parser = subparsers.add_parser("claim", help="Check claim evidence.")
-    claim_subparsers = claim_parser.add_subparsers(dest="claim_command")
+    claim_subparsers = claim_parser.add_subparsers(dest="claim_command", required=True)
     claim_list = claim_subparsers.add_parser("list", help="List project claims.")
     claim_list.add_argument("--project", required=True, help="Project id or slug.")
     claim_list.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
@@ -379,7 +391,7 @@ def build_parser() -> argparse.ArgumentParser:
     claim_check.add_argument("--dry-run", action="store_true", help="Print report without writing.")
 
     draft_parser = subparsers.add_parser("draft", help="Plan evidence-gated drafts.")
-    draft_subparsers = draft_parser.add_subparsers(dest="draft_command")
+    draft_subparsers = draft_parser.add_subparsers(dest="draft_command", required=True)
     draft_outline = draft_subparsers.add_parser("outline", help="Create a draft outline.")
     draft_outline.add_argument("--project", required=True, help="Project id or slug.")
     draft_outline.add_argument("--workspace", required=True, help="ResearchInfra workspace path.")
@@ -401,16 +413,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     agent_parser = subparsers.add_parser("agent", help="Manage agent task specs.")
-    agent_subparsers = agent_parser.add_subparsers(dest="agent_command")
+    agent_subparsers = agent_parser.add_subparsers(dest="agent_command", required=True)
     agent_task = agent_subparsers.add_parser("task", help="Manage project agent tasks.")
-    agent_task_subparsers = agent_task.add_subparsers(dest="agent_task_command")
+    agent_task_subparsers = agent_task.add_subparsers(dest="agent_task_command", required=True)
     agent_task_create = agent_task_subparsers.add_parser("create", help="Create an agent task.")
     agent_task_create.add_argument("--project", required=True, help="Project id or slug.")
     agent_task_create.add_argument(
         "--workspace", required=True, help="ResearchInfra workspace path."
     )
     agent_task_create.add_argument("--type", required=True, choices=TASK_TYPES)
-    agent_task_create.add_argument("--title", required=True, help="Task title.")
+    agent_task_create.add_argument("--title", required=True, type=_nonempty, help="Task title.")
 
     agent_task_list = agent_task_subparsers.add_parser("list", help="List agent tasks.")
     agent_task_list.add_argument("--project", required=True, help="Project id or slug.")
@@ -439,17 +451,35 @@ def build_parser() -> argparse.ArgumentParser:
 def run(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and return a process exit code."""
 
+    try:
+        return _run(argv)
+    except ValidationError as exc:
+        return _error(_validation_error(exc), code=2)
+
+
+def _run(argv: Sequence[str] | None = None) -> int:
+    """Dispatch parsed CLI arguments while keeping validation failures user-facing."""
+
     parser = build_parser()
     try:
         args = parser.parse_args(argv)
     except SystemExit as exc:
         return int(exc.code or 0)
 
+    if args.command and args.command != "init":
+        workspace = getattr(args, "workspace", None)
+        if not isinstance(workspace, str) or not workspace.strip():
+            return _error("`--workspace` must not be empty.", code=2)
+        try:
+            require_workspace(workspace)
+        except WorkspaceError as exc:
+            return _error(str(exc), code=2)
+
     if args.command == "init":
         try:
             result = init_workspace(args.workspace, name=args.name, force=args.force)
-        except WorkspaceExistsError as exc:
-            return _error(str(exc))
+        except (WorkspaceExistsError, WorkspaceError) as exc:
+            return _error(str(exc), code=2)
 
         print(f"Initialized ResearchInfra workspace at {result.path}")
         print(f"Wrote config: {result.config_path}")
@@ -510,12 +540,15 @@ def run(argv: Sequence[str] | None = None) -> int:
 def _run_source(args: argparse.Namespace) -> int:
     registry = SourceRegistry(args.workspace)
     if args.source_command == "add":
-        source = registry.add(
-            args.target,
-            source_type=args.type,
-            title=args.title,
-            tags=_parse_tags(args.tags),
-        )
+        try:
+            source = registry.add(
+                args.target,
+                source_type=args.type,
+                title=args.title,
+                tags=_parse_tags(args.tags),
+            )
+        except SourceRegistryError as exc:
+            return _error(str(exc), code=2)
         print(f"Added source: {source.id}")
         print(f"Title: {source.title or '(untitled)'}")
         print(f"Target: {source.target}")
@@ -720,6 +753,7 @@ def _run_skill(args: argparse.Namespace) -> int:
 
     if args.skill_command == "run":
         try:
+            skill = runner.get(args.skill_name)
             prompt = runner.render(args.skill_name, args.input)
         except (SkillNotFoundError, SourceNotFoundError) as exc:
             return _error(str(exc), code=2)
@@ -727,10 +761,16 @@ def _run_skill(args: argparse.Namespace) -> int:
             print(prompt)
             return 0
 
-        provider = OpenAICompatibleProvider(
-            ModelProviderConfig(id="openai-compatible", provider="openai-compatible")
-        )
         try:
+            provider = ModelDispatcher(args.workspace).provider_for_task(
+                task_for_skill_category(skill.category)
+            )
+            if provider is None:
+                return _error(
+                    "No enabled model default is configured for this skill. Use "
+                    "`researchinfra model set-default` or rerun with --dry-run.",
+                    code=2,
+                )
             result = provider.complete(prompt)
         except (ModelProviderConfigurationError, ModelProviderRequestError) as exc:
             return _error(str(exc), code=2)
@@ -751,16 +791,12 @@ def _run_skill(args: argparse.Namespace) -> int:
 
 def _run_model(args: argparse.Namespace) -> int:
     if args.model_command == "check":
-        provider = OpenAICompatibleProvider(
-            ModelProviderConfig(id="openai-compatible", provider="openai-compatible")
-        )
-        status = provider.status()
-        print(f"Provider: {status['provider']}")
-        print(f"Configured: {status['configured']}")
-        print(f"API key: {status['api_key']}")
-        print(f"Base URL: {status['base_url']}")
-        print(f"Model: {status['model']}")
-        return 0
+        try:
+            status = ModelRegistry(args.workspace).test()
+        except ModelRegistryError as exc:
+            return _error(str(exc), code=2)
+        print(yaml.safe_dump(status, sort_keys=False).strip())
+        return 0 if status.get("can_execute") else 2
 
     if args.model_command == "list":
         try:
@@ -800,7 +836,7 @@ def _run_model(args: argparse.Namespace) -> int:
         except ModelRegistryError as exc:
             return _error(str(exc), code=2)
         print(yaml.safe_dump(status, sort_keys=False).strip())
-        return 0 if status.get("configured") else 2
+        return 0 if status.get("can_execute") else 2
 
     return _error("model requires a subcommand: check, list, set-default, or test", code=2)
 
@@ -1243,6 +1279,38 @@ def _parse_metric_value(value: str) -> object:
         return int(value)
     except ValueError:
         return value
+
+
+def _nonempty(value: str) -> str:
+    """Parse a user-supplied text argument without accepting blank values."""
+
+    normalized = value.strip()
+    if not normalized:
+        raise argparse.ArgumentTypeError("must not be empty")
+    return normalized
+
+
+def _skill_component(value: str) -> str:
+    """Parse a safe filename-like skill component."""
+
+    normalized = _nonempty(value)
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", normalized):
+        raise argparse.ArgumentTypeError(
+            "must use letters, numbers, hyphens, or underscores and cannot contain paths"
+        )
+    return normalized
+
+
+def _validation_error(exc: ValidationError) -> str:
+    """Render the first Pydantic error without exposing an internal traceback."""
+
+    errors = exc.errors()
+    if not errors:
+        return "Invalid input."
+    error = errors[0]
+    location = ".".join(str(item) for item in error.get("loc", ())) or "input"
+    message = str(error.get("msg", "Invalid value."))
+    return f"Invalid {location}: {message}"
 
 
 def _error(message: str, *, code: int = 1) -> int:

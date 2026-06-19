@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from string import Template
 from textwrap import dedent
@@ -491,6 +492,8 @@ class SkillRunner:
     def create(self, name: str, *, category: str) -> tuple[Path, Path]:
         """Create a workspace skill skeleton."""
 
+        name = _skill_component(name, label="Skill name")
+        category = _skill_component(category, label="Skill category")
         category_dir = self.workspace / "skills" / category
         category_dir.mkdir(parents=True, exist_ok=True)
         yaml_path = category_dir / f"{name}.yaml"
@@ -693,6 +696,19 @@ class SkillRunner:
             if skill is not None:
                 skills.append(skill)
         return skills
+
+
+def _skill_component(value: str, *, label: str) -> str:
+    """Validate a skill path component before it becomes a workspace filename."""
+
+    normalized = value.strip()
+    if not normalized:
+        raise SkillError(f"{label} must not be empty.")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", normalized):
+        raise SkillError(
+            f"{label} must use letters, numbers, hyphens, or underscores and cannot contain paths."
+        )
+    return normalized
 
 
 def _load_skill_file(path: Path, skills_dir: Path) -> Skill | None:

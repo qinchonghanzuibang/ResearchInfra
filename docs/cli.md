@@ -152,8 +152,11 @@ researchinfra skill run paper_card \
   --dry-run
 ```
 
-Running without `--dry-run` uses the OpenAI-compatible provider when
-`OPENAI_API_KEY` is configured.
+Running without `--dry-run` uses the workspace default selected for the skill's
+task tier. In this alpha, only `openai-compatible` has an executable runtime
+adapter; set its default and configure `OPENAI_API_KEY` before running a skill.
+Other provider kinds are recorded as extension points and fail with setup
+guidance rather than silently falling back to a different provider.
 
 ## Reading
 
@@ -181,13 +184,18 @@ researchinfra model set-default \
   --provider openai-compatible \
   --model gpt-4o-mini
 researchinfra model test --workspace /tmp/ri-demo --task reading
-researchinfra model check
+researchinfra model check --workspace /tmp/ri-demo
 ```
 
 `model test` performs a local readiness check and prints setup instructions when
 a provider is missing, uninstalled, or unconfigured. It never prints API key
 values. Supported provider kinds are `openai-compatible`, `litellm`, `ollama`,
 `anthropic`, `openrouter`, and `vllm`.
+
+Model defaults are used by `skill run`, `paper read`, Paper Card creation, and
+Idea Card generation. `can_execute: true` currently means an OpenAI-compatible
+runtime is configured; the remaining provider kinds are non-executable
+placeholders until concrete adapters are installed.
 
 OpenAI-compatible runtime calls use:
 

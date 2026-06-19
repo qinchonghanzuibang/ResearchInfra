@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import os
-import shutil
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from researchinfra.models.adapters import OpenAICompatibleProvider
 from researchinfra.schemas import ModelProviderConfig, ProviderKind, WorkspaceConfig
+from researchinfra.workspace import WorkspaceError, load_workspace_config
 
 
 class ModelRegistryError(RuntimeError):
@@ -79,12 +77,24 @@ class ModelRegistry:
         return updated
 
     def test(self, *, task: str | None = None) -> dict[str, Any]:
-        """Return a local readiness check for the default or first enabled provider."""
+        """Return a local readiness check for the provider a runtime call would use."""
 
         if task is not None and task not in MODEL_TASKS:
             raise ModelRegistryError(f"Unsupported model task: {task}")
         config = self._load()
-        provider = self._select_provider(config, task=task)
+        provider = self._select_execution_provider(config, task=task)
+        if provider is None:
+            task_label = task or "default"
+            return {
+                "task": task_label,
+                "provider_id": "(none)",
+                "provider": "(none)",
+                "model": "(not set)",
+                "configured": False,
+                "can_execute": False,
+                "message": "No enabled model default is configured. Use "
+                "`researchinfra model set-default` before running model-invoking commands.",
+            }
         status = self._status_for(provider)
         return {
             "task": task or "default",
@@ -94,25 +104,31 @@ class ModelRegistry:
             **status,
         }
 
+    def provider_for_execution(self, *, task: str) -> ModelProviderConfig | None:
+        """Return an explicitly configured provider for a runtime task, if one exists."""
+
+        if task not in MODEL_TASKS:
+            raise ModelRegistryError(f"Unsupported model task: {task}")
+        return self._select_execution_provider(self._load(), task=task)
+
     def _load(self) -> WorkspaceConfig:
-        if not self.config_path.exists():
-            raise ModelRegistryError(
-                f"Workspace config not found: {self.config_path}. "
-                "Run `researchinfra init <workspace>` first."
-            )
-        data = yaml.safe_load(self.config_path.read_text(encoding="utf-8")) or {}
-        if not isinstance(data, dict):
-            raise ModelRegistryError(f"Invalid workspace config: {self.config_path}")
-        return WorkspaceConfig.model_validate(data)
+        try:
+            return load_workspace_config(self.workspace)
+        except WorkspaceError as exc:
+            raise ModelRegistryError(str(exc)) from exc
 
     def _write(self, config: WorkspaceConfig) -> None:
+        import yaml
+
         self.config_path.write_text(
             yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False),
             encoding="utf-8",
         )
 
-    def _select_provider(self, config: WorkspaceConfig, *, task: str | None) -> ModelProviderConfig:
-        provider_id = config.model_defaults.get(task or "") if task else None
+    def _select_execution_provider(
+        self, config: WorkspaceConfig, *, task: str | None
+    ) -> ModelProviderConfig | None:
+        provider_id = config.model_defaults.get(task) if task else None
         if provider_id:
             index = self._find_provider_index(config.model_providers, provider_id)
             if index is not None:
@@ -122,9 +138,7 @@ class ModelRegistry:
         enabled = [provider for provider in config.model_providers if provider.enabled]
         if enabled:
             return enabled[0]
-        if config.model_providers:
-            return config.model_providers[0]
-        raise ModelRegistryError("No model providers are configured in this workspace.")
+        return None
 
     def _find_provider_index(
         self, providers: list[ModelProviderConfig], provider_id: str
@@ -148,15 +162,15 @@ class ModelRegistry:
     def _status_for(self, provider: ModelProviderConfig) -> dict[str, Any]:
         if provider.provider == "openai-compatible":
             status = OpenAICompatibleProvider(provider).status()
-            configured = bool(status["configured"]) and bool(provider.model or status["model"])
             instructions = (
                 "Set OPENAI_API_KEY and optionally OPENAI_BASE_URL/OPENAI_MODEL, or set a "
                 "model default with `researchinfra model set-default`."
             )
             return {
-                "configured": configured,
+                "configured": bool(status["configured"]),
                 "api_key": status["api_key"],
                 "base_url": status["base_url"],
+                "model": status["model"],
                 "can_execute": bool(status["configured"]),
                 "message": "OpenAI-compatible configuration is ready."
                 if status["configured"]
@@ -164,27 +178,28 @@ class ModelRegistry:
             }
 
         if provider.provider == "litellm":
-            configured = bool(provider.base_url or os.environ.get("LITELLM_BASE_URL"))
+            configured = bool(
+                (provider.base_url or os.environ.get("LITELLM_BASE_URL")) and provider.model
+            )
             return {
                 "configured": configured,
-                "can_execute": configured,
+                "can_execute": False,
                 "message": "Configure a LiteLLM proxy/base_url and model."
                 if not configured
-                else "LiteLLM gateway configuration is present.",
+                else "LiteLLM is configured but has no executable adapter in ResearchInfra 0.1. "
+                "Use an OpenAI-compatible endpoint or add a LiteLLM adapter.",
             }
 
         if provider.provider == "ollama":
-            has_binary = shutil.which("ollama") is not None
-            configured = has_binary and bool(provider.model)
+            configured = bool(provider.model)
             return {
                 "configured": configured,
-                "can_execute": configured,
-                "message": (
-                    "Install Ollama, start `ollama serve`, pull a model, then set the "
-                    "ResearchInfra default."
-                    if not configured
-                    else "Ollama executable and model setting are present."
-                ),
+                "can_execute": False,
+                "message": "Install Ollama, start `ollama serve`, pull a model, and set a model "
+                "default. ResearchInfra 0.1 has no executable Ollama adapter yet."
+                if not configured
+                else "Ollama is configured but has no executable adapter in ResearchInfra 0.1. "
+                "Use an OpenAI-compatible endpoint or add an Ollama adapter.",
             }
 
         if provider.provider == "anthropic":
@@ -192,8 +207,12 @@ class ModelRegistry:
             return {
                 "configured": configured,
                 "api_key": "set" if os.environ.get("ANTHROPIC_API_KEY") else "missing",
-                "can_execute": configured,
-                "message": "Set ANTHROPIC_API_KEY and a model before using Anthropic.",
+                "can_execute": False,
+                "message": "Set ANTHROPIC_API_KEY and a model. ResearchInfra 0.1 has no "
+                "executable Anthropic adapter yet."
+                if not configured
+                else "Anthropic is configured but has no executable adapter in ResearchInfra 0.1. "
+                "Use an OpenAI-compatible endpoint or add an Anthropic adapter.",
             }
 
         if provider.provider == "openrouter":
@@ -201,16 +220,24 @@ class ModelRegistry:
             return {
                 "configured": configured,
                 "api_key": "set" if os.environ.get("OPENROUTER_API_KEY") else "missing",
-                "can_execute": configured,
-                "message": "Set OPENROUTER_API_KEY and a model before using OpenRouter.",
+                "can_execute": False,
+                "message": "Set OPENROUTER_API_KEY and a model. ResearchInfra 0.1 has no "
+                "executable OpenRouter adapter yet."
+                if not configured
+                else "OpenRouter is configured but has no executable adapter in ResearchInfra 0.1. "
+                "Use an OpenAI-compatible endpoint or add an OpenRouter adapter.",
             }
 
         if provider.provider == "vllm":
             configured = bool(provider.base_url and provider.model)
             return {
                 "configured": configured,
-                "can_execute": configured,
-                "message": "Run a vLLM OpenAI-compatible server and set base_url/model.",
+                "can_execute": False,
+                "message": "Run a vLLM OpenAI-compatible server and set base_url/model. "
+                "ResearchInfra 0.1 has no dedicated vLLM adapter yet."
+                if not configured
+                else "vLLM is configured but has no executable adapter in ResearchInfra 0.1. "
+                "Use an OpenAI-compatible provider config for the server endpoint.",
             }
 
         return {

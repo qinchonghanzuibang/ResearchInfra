@@ -176,6 +176,9 @@ class ResultRegistry:
     def create_figure(self, project_id: str, *, title: str) -> tuple[FigureRecord, Path, Path]:
         """Create a figure placeholder linked to available run ids."""
 
+        title = title.strip()
+        if not title:
+            raise ResultRegistryError("Figure title must not be empty.")
         project = self.projects.get(project_id)
         base = self.projects.path_for(project)
         figure_dir = base / "figures"

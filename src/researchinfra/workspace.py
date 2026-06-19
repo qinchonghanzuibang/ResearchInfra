@@ -7,6 +7,7 @@ from pathlib import Path
 from textwrap import dedent
 
 import yaml
+from pydantic import ValidationError
 
 from researchinfra.schemas import AgentBackendConfig, ModelProviderConfig, WorkspaceConfig
 
@@ -17,6 +18,14 @@ class WorkspaceError(RuntimeError):
 
 class WorkspaceExistsError(WorkspaceError):
     """Raised when refusing to initialize over a non-empty directory."""
+
+
+class WorkspaceNotInitializedError(WorkspaceError):
+    """Raised when a command targets a directory without workspace metadata."""
+
+
+class WorkspaceConfigError(WorkspaceError):
+    """Raised when workspace metadata cannot be parsed or validated."""
 
 
 WORKSPACE_DIRECTORIES: tuple[str, ...] = (
@@ -125,7 +134,9 @@ def init_workspace(
             f"{workspace_path} already exists and is not empty. Use --force to add missing files."
         )
 
-    workspace_name = name or workspace_path.name
+    workspace_name = (name or workspace_path.name).strip()
+    if not workspace_name:
+        raise WorkspaceError("Workspace name must not be empty.")
     workspace_path.mkdir(parents=True, exist_ok=True)
 
     for directory in WORKSPACE_DIRECTORIES:
@@ -142,6 +153,41 @@ def init_workspace(
     _write_agent_placeholders(workspace_path)
 
     return InitializedWorkspace(path=workspace_path, config_path=config_path, config=config)
+
+
+def workspace_config_path(path: str | Path) -> Path:
+    """Return the canonical workspace configuration path without creating files."""
+
+    workspace = Path(path).expanduser().resolve()
+    return workspace / ".researchinfra" / "workspace.yaml"
+
+
+def load_workspace_config(path: str | Path) -> WorkspaceConfig:
+    """Load and validate an initialized workspace configuration."""
+
+    config_path = workspace_config_path(path)
+    if not config_path.is_file():
+        raise WorkspaceNotInitializedError(
+            f"Workspace config not found: {config_path}. "
+            "Run `researchinfra init <workspace>` first."
+        )
+    try:
+        data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        raise WorkspaceConfigError(f"Could not read workspace config: {config_path}") from exc
+    if not isinstance(data, dict):
+        raise WorkspaceConfigError(f"Invalid workspace config: {config_path}")
+    try:
+        return WorkspaceConfig.model_validate(data)
+    except ValidationError as exc:
+        raise WorkspaceConfigError(f"Invalid workspace config: {config_path}") from exc
+
+
+def require_workspace(path: str | Path) -> Path:
+    """Validate a workspace marker and return its normalized root path."""
+
+    load_workspace_config(path)
+    return Path(path).expanduser().resolve()
 
 
 def _write_yaml(path: Path, data: object) -> None:

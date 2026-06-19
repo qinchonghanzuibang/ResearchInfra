@@ -2,10 +2,12 @@ import yaml
 
 from researchinfra.cards import IdeaCardService, PaperCardService
 from researchinfra.sources import SourceRegistry
+from researchinfra.workspace import init_workspace
 
 
 def test_paper_card_service_writes_markdown_and_yaml(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    init_workspace(tmp_path)
     source = SourceRegistry(tmp_path).add(
         "https://arxiv.org/abs/1234.5678",
         source_type="paper",
@@ -24,6 +26,7 @@ def test_paper_card_service_writes_markdown_and_yaml(tmp_path, monkeypatch) -> N
 
 def test_idea_card_service_writes_markdown_and_yaml(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    init_workspace(tmp_path)
     source = SourceRegistry(tmp_path).add(
         "https://arxiv.org/abs/1234.5678",
         source_type="paper",

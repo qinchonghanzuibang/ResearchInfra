@@ -75,10 +75,15 @@ researchinfra model set-default \
   --provider openai-compatible \
   --model gpt-4o-mini
 researchinfra model test --workspace /tmp/ri-demo --task reading
+researchinfra model check --workspace /tmp/ri-demo
 ```
 
-`researchinfra model check` is kept as a quick OpenAI-compatible environment
-check. All model commands report only secret presence, never secret values.
+All model commands report only secret presence, never secret values. Task
+defaults drive model-invoking commands; in this alpha, only
+`openai-compatible` has an executable runtime adapter. LiteLLM, Ollama,
+Anthropic, OpenRouter, and vLLM remain explicit configuration extension points
+and report `can_execute: false` until adapters are implemented.
+
 Runtime OpenAI-compatible calls use:
 
 - `OPENAI_API_KEY`

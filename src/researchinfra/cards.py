@@ -9,9 +9,9 @@ from textwrap import dedent
 import yaml
 
 from researchinfra.documents import DocumentStore
-from researchinfra.models.adapters import OpenAICompatibleProvider
-from researchinfra.models.base import ModelProviderRequestError
-from researchinfra.schemas import ModelProviderConfig, Source, utc_now
+from researchinfra.models.base import ModelProviderConfigurationError, ModelProviderRequestError
+from researchinfra.models.dispatcher import ModelDispatcher
+from researchinfra.schemas import Source, utc_now
 from researchinfra.skills import SkillRunner
 from researchinfra.sources import SourceRegistry
 
@@ -47,6 +47,8 @@ class PaperCardService:
         prompt = self.render_prompt(source_id, use_content=use_content)
         content = _complete_or_metadata_skeleton(
             prompt,
+            workspace=self.workspace,
+            task="reading",
             fallback=_paper_fallback_markdown(
                 paper_id, source, document_id=document.id if document else None
             ),
@@ -88,6 +90,8 @@ class IdeaCardService:
         prompt = self.runner.render("idea_card", str(paper_path))
         content = _complete_or_metadata_skeleton(
             prompt,
+            workspace=self.workspace,
+            task="reasoning",
             fallback=_idea_fallback_markdown(idea_id, paper_id, paper_path),
         )
         metadata = {
@@ -105,17 +109,21 @@ class IdeaCardService:
         return idea_id, markdown_path, yaml_path
 
 
-def _complete_or_metadata_skeleton(prompt: str, *, fallback: str) -> str:
-    provider = OpenAICompatibleProvider(
-        ModelProviderConfig(id="openai-compatible", provider="openai-compatible")
-    )
-    if provider.is_configured():
-        try:
-            result = provider.complete(prompt)
-        except ModelProviderRequestError as exc:
-            raise CardError(str(exc)) from exc
-        if result.text:
-            return _ensure_warning(result.text)
+def _complete_or_metadata_skeleton(
+    prompt: str, *, workspace: Path, task: str, fallback: str
+) -> str:
+    try:
+        provider = ModelDispatcher(workspace).provider_for_task(task)
+    except ModelProviderConfigurationError as exc:
+        raise CardError(str(exc)) from exc
+    if provider is None:
+        return fallback
+    try:
+        result = provider.complete(prompt)
+    except (ModelProviderConfigurationError, ModelProviderRequestError) as exc:
+        raise CardError(str(exc)) from exc
+    if result.text:
+        return _ensure_warning(result.text)
     return fallback
 
 

@@ -79,6 +79,9 @@ class SourceRegistry:
     ) -> Source:
         """Add or update a source record for a local path or URL."""
 
+        target = target.strip()
+        if not target:
+            raise SourceRegistryError("Source target must not be empty.")
         self.registry_path.parent.mkdir(parents=True, exist_ok=True)
         normalized_target = self._normalize_target(target)
         source_id = self._source_id(normalized_target)

@@ -7,12 +7,12 @@ from textwrap import dedent
 
 import yaml
 
-from researchinfra.models.adapters import OpenAICompatibleProvider
 from researchinfra.models.base import (
     ModelProviderConfigurationError,
     ModelProviderRequestError,
 )
-from researchinfra.schemas import ModelProviderConfig, Source, utc_now
+from researchinfra.models.dispatcher import ModelDispatcher
+from researchinfra.schemas import Source, utc_now
 from researchinfra.skills import READING_MODES, SkillRunner
 from researchinfra.sources import SourceRegistry
 
@@ -65,29 +65,29 @@ class ReadingService:
         source = self.registry.get(source_id)
         skill_name = _skill_for_mode(mode)
         prompt = self.render_prompt(source_id, mode=mode)
-        provider = OpenAICompatibleProvider(
-            ModelProviderConfig(id="openai-compatible", provider="openai-compatible")
-        )
-        execution_status = "model_generated" if provider.is_configured() else "prompt_only"
         warnings: list[str] = []
+        try:
+            provider = ModelDispatcher(self.workspace).provider_for_task("reading")
+        except ModelProviderConfigurationError as exc:
+            raise ReadingError(str(exc)) from exc
 
-        if provider.is_configured():
+        if provider is not None:
             try:
                 result = provider.complete(prompt)
-            except ModelProviderConfigurationError:
-                execution_status = "prompt_only"
-                warnings.append("Model provider was not configured; saved prompt-only notes.")
-                content = _prompt_only_notes(source, mode=mode, prompt=prompt)
+            except ModelProviderConfigurationError as exc:
+                raise ReadingError(str(exc)) from exc
             except ModelProviderRequestError as exc:
                 raise ReadingError(str(exc)) from exc
             else:
+                execution_status = "model_generated"
                 content = result.text or ""
                 if not content.strip():
                     execution_status = "prompt_only"
                     warnings.append("Model provider returned empty text; saved prompt-only notes.")
                     content = _prompt_only_notes(source, mode=mode, prompt=prompt)
         else:
-            warnings.append("OPENAI_API_KEY is not set; saved prompt-only notes.")
+            execution_status = "prompt_only"
+            warnings.append("No model default is configured for reading; saved prompt-only notes.")
             content = _prompt_only_notes(source, mode=mode, prompt=prompt)
 
         return self._write(

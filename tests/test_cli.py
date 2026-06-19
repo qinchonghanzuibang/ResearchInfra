@@ -136,6 +136,25 @@ def test_cli_skill_missing_api_key_is_clear(tmp_path, capsys, monkeypatch) -> No
         line.split(": ", 1)[1] for line in add_output.splitlines() if line.startswith("Added")
     )
 
+    assert (
+        run(
+            [
+                "model",
+                "set-default",
+                "--workspace",
+                str(workspace),
+                "--task",
+                "writing",
+                "--provider",
+                "openai-compatible",
+                "--model",
+                "demo-model",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+
     code = run(
         [
             "skill",
@@ -154,15 +173,36 @@ def test_cli_skill_missing_api_key_is_clear(tmp_path, capsys, monkeypatch) -> No
     assert "Traceback" not in captured.err
 
 
-def test_cli_model_check_hides_secrets(capsys, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_cli_model_check_hides_secrets(tmp_path, capsys, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setenv("OPENAI_API_KEY", "secret-value")
     monkeypatch.setenv("OPENAI_MODEL", "demo-model")
+    workspace = tmp_path / "workspace"
+    assert run(["init", str(workspace)]) == 0
+    capsys.readouterr()
+    assert (
+        run(
+            [
+                "model",
+                "set-default",
+                "--workspace",
+                str(workspace),
+                "--task",
+                "reading",
+                "--provider",
+                "openai-compatible",
+                "--model",
+                "demo-model",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
 
-    code = run(["model", "check"])
+    code = run(["model", "check", "--workspace", str(workspace)])
     output = capsys.readouterr().out
 
     assert code == 0
-    assert "API key: set" in output
+    assert "api_key: set" in output
     assert "secret-value" not in output
     assert "demo-model" in output
 

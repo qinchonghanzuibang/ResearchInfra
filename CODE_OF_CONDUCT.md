@@ -15,6 +15,8 @@ lead to a temporary or permanent ban from project spaces.
 
 ## Reporting
 
-Report conduct concerns to the project maintainers. Reports should include
-relevant context and will be handled with care.
-
+For non-sensitive concerns, open a GitHub Issue that identifies the relevant
+conduct concern and asks for maintainer review. For sensitive concerns, open a
+minimal GitHub Issue requesting a private contact channel without including
+personal or incident details. Maintainers should acknowledge the request and
+move the discussion to a private channel as soon as practical.

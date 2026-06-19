@@ -1,7 +1,7 @@
 # ResearchInfra
 
-ResearchInfra is an AI-native research operating system for managing the full
-lifecycle of AI research in a local, file-first workspace.
+ResearchInfra is an alpha-stage, AI-native research operating system for
+managing the full lifecycle of AI research in a local, file-first workspace.
 
 It is designed for researchers and AI agents to work over the same durable
 project state: papers, ideas, projects, experiments, baselines, runs, claims,
@@ -114,6 +114,7 @@ the CLI:
 
 ```bash
 researchinfra --help
+python -m researchinfra --help
 researchinfra init my-research
 researchinfra project create \
   --workspace my-research \
@@ -171,6 +172,17 @@ researchinfra model test --workspace my-research --task reading
 ```
 
 Provider checks never print API keys.
+
+Model defaults are used by model-invoking commands such as `researchinfra skill
+run`, `paper read`, Paper Card creation, and Idea Card generation. In this alpha,
+the executable runtime adapter is `openai-compatible`; LiteLLM, Ollama,
+Anthropic, OpenRouter, and vLLM are visible configuration extension points and
+report `can_execute: false` until concrete adapters are added. File-first
+planning, claim, result, and submission commands remain provider-free.
+
+Every workspace command validates `.researchinfra/workspace.yaml` before it
+reads or writes research state. Run `researchinfra init <workspace>` first; a
+typoed workspace path will fail rather than create a partial workspace.
 
 ## Architecture
 

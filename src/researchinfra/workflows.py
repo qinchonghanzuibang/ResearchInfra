@@ -47,11 +47,21 @@ class ProjectService:
     ) -> tuple[Project, Path]:
         """Create a project from optional existing research artifacts."""
 
+        name = name.strip()
+        if not name:
+            raise WorkflowError("Project name must not be empty.")
         slug = _slug(name)
         project_id = f"project-{slug}"
         base = self.projects_dir / slug
         if (base / "project.yaml").exists():
             raise WorkflowError(f"Project already exists: {project_id}")
+
+        _require_seed_artifacts(
+            workspace=self.workspace,
+            idea_id=from_idea,
+            paper_id=from_paper,
+            reading_id=from_reading,
+        )
 
         for directory in (
             "context",
@@ -69,12 +79,6 @@ class ProjectService:
         ):
             (base / directory).mkdir(parents=True, exist_ok=True)
 
-        _require_seed_artifacts(
-            workspace=self.workspace,
-            idea_id=from_idea,
-            paper_id=from_paper,
-            reading_id=from_reading,
-        )
         project = Project(
             id=project_id,
             title=name,
@@ -501,6 +505,9 @@ class AgentTaskService:
 
         if task_type not in TASK_TYPES:
             raise WorkflowError(f"Unsupported task type: {task_type}")
+        title = title.strip()
+        if not title:
+            raise WorkflowError("Agent task title must not be empty.")
         project = self.projects.get(project_id)
         base = self.projects.path_for(project)
         tasks_dir = base / "agents" / "tasks"
