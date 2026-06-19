@@ -5,7 +5,7 @@ All notable changes to ResearchInfra will be documented here.
 The project follows Conventional Commits and aims to keep schema and workspace
 layout changes explicit.
 
-## 0.1.0 - Unreleased
+## 0.1.0 - 2026-06-19
 
 - Redact provider failure details so upstream responses cannot echo credentials
   into CLI errors.
