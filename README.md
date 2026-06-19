@@ -65,10 +65,54 @@ experiment tracker. It is a clean substrate for serious research infrastructure.
 
 ## Quickstart
 
+ResearchInfra requires Python 3.10 or newer; Python 3.12 is recommended.
+Choose one of the following environment setup options for each checkout.
+
+### uv (recommended)
+
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) if it is
+not already available. On macOS or Linux, its official installer is:
+
 ```bash
-python3 -m venv .venv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Open a new shell if `uv` is not immediately found, then create the environment
+and install the development dependencies:
+
+```bash
+uv venv --python 3.12
 source .venv/bin/activate
-pip install -e ".[dev]"
+uv pip install -e ".[dev]"
+```
+
+### Conda
+
+Install [Miniforge](https://conda-forge.org/download/) (or another Conda
+distribution) if `conda` is not available. Then create the included Conda
+environment, which installs ResearchInfra and its development dependencies:
+
+```bash
+conda env create -f environment.yml
+conda activate researchinfra
+```
+
+`mamba env create -f environment.yml` is a compatible, faster alternative when
+mamba is installed.
+
+### pip and venv
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+```
+
+After activating one of the environments above, initialize a workspace and run
+the CLI:
+
+```bash
 researchinfra --help
 researchinfra init my-research
 researchinfra project create \
